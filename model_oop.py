@@ -1,6 +1,6 @@
+import os
 from abc import ABC, abstractmethod
 
-import numpy as np
 import tensorflow as tf
 from tensorflow.lite.python.interpreter import Interpreter
 
@@ -20,6 +20,9 @@ class RainModel(ABC):
     def save_prediction_files(self, input_data, folder_path):
         prediction = self.__prediction(input_data)
         self.__save_as_ascii_grid(prediction, folder_path)
+
+    def __create_folder_recursive(self, folder_path):
+        os.makedirs(folder_path, exist_ok=True)
 
     def __rain(self, array):
         R = array * 255.0
@@ -96,6 +99,7 @@ class RainVer1Model(RainModel):
         self.model = self.__load_model(path)
 
     def save_prediction_files(self, input_data: np.ndarray, output_folder_path: str):
+        self.__create_folder_recursive(output_folder_path)
         prediction = self.__prediction(input_data)
         for j in range(10, 190, 10):
             output_file_path = f"{output_folder_path}/QPF_REC_{j}.asc"
@@ -133,6 +137,7 @@ class RainVer2Model(RainModel):
         self.model: list[Interpreter] = self.__load_model(path)
 
     def save_prediction_files(self, input_data: np.ndarray, output_folder_path: str):
+        self.__create_folder_recursive(output_folder_path)
         prediction = self.__prediction(input_data)
         for j in range(10, 190, 10):
             output_file_path = f"{output_folder_path}/QPF_{j}.asc"
