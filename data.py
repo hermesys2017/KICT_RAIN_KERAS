@@ -1,7 +1,7 @@
 import numpy as np
 
 
-def dataset(files):
+def dataset(files, is_ver1_tflite=False):
     """
     files:
         4개의 파일을 가지고 있어야 함. 각 파일은 30분전, 20분전, 10분전, 현재의 QPE 데이터를 가지고 있어야 함.
@@ -13,7 +13,10 @@ def dataset(files):
     )
     feature0 = dataset[:, :, :]
     feature = np.where(feature0 < 0.0, 0, feature0)
-    feature = __data_preprocessing(feature)
+    if is_ver1_tflite:
+        feature = np.expand_dims(feature, axis=0)
+    else:
+        feature = __data_preprocessing(feature)
     return feature
 
 
