@@ -11,19 +11,19 @@
    </rect>
   </property>
   <property name="windowTitle">
-   <string>Dialog</string>
+   <string>KICT-RAIN-AI</string>
   </property>
   <widget class="QRadioButton" name="radioButton">
    <property name="geometry">
     <rect>
      <x>40</x>
      <y>260</y>
-     <width>90</width>
+     <width>101</width>
      <height>16</height>
     </rect>
    </property>
    <property name="text">
-    <string>Version 1</string>
+    <string>Multi Target</string>
    </property>
    <property name="checked">
     <bool>true</bool>
@@ -34,12 +34,12 @@
     <rect>
      <x>180</x>
      <y>260</y>
-     <width>90</width>
+     <width>101</width>
      <height>16</height>
     </rect>
    </property>
    <property name="text">
-    <string>Version 2</string>
+    <string>Single Target</string>
    </property>
   </widget>
   <widget class="QLabel" name="label">
@@ -248,7 +248,7 @@
     </rect>
    </property>
    <property name="text">
-    <string>Recent data</string>
+    <string>Data at forecasting time</string>
    </property>
   </widget>
   <widget class="QCheckBox" name="checkBox">

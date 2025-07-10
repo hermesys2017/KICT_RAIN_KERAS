@@ -1,0 +1,5 @@
+<RCC>
+    <qresource prefix="/plugins/kict_rain_forecast" >
+        <file>icon.png</file>
+    </qresource>
+</RCC>
