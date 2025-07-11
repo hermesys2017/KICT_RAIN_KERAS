@@ -175,41 +175,46 @@ class KictRainPredictor:
 
     def check_and_install_dependencies(self):
         """필요한 패키지가 설치되어 있는지 확인하고, 없으면 설치합니다."""
-        required_packages = ["gdown", "tensorflow", "numpy"]
+        required_packages = ["gdown", "tensorflow", "numpy", "keras"]
         missing_packages = []
 
         for package in required_packages:
             try:
                 importlib.import_module(package)
-                print(f"{package} 패키지가 이미 설치되어 있습니다.")
+                print(f"{package} " + self.tr("패키지가 이미 설치되어 있습니다."))
             except ImportError:
                 missing_packages.append(package)
 
         if missing_packages:
             msg = QMessageBox()
             msg.setIcon(QMessageBox.Information)
-            msg.setText(f"다음 패키지를 설치해야 합니다: {', '.join(missing_packages)}")
-            msg.setInformativeText("설치를 진행하시겠습니까?")
-            msg.setWindowTitle("패키지 설치")
+            msg.setText(
+                self.tr("다음 패키지를 설치해야 합니다:")
+                + f" {', '.join(missing_packages)}"
+            )
+            msg.setInformativeText(self.tr("설치를 진행하시겠습니까?"))
+            msg.setWindowTitle(self.tr("패키지 설치"))
             msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
 
             if msg.exec_() == QMessageBox.Yes:
                 try:
                     for package in missing_packages:
-                        print(f"{package} 설치 중...")
+                        print(f"{package} " + self.tr("설치 중..."))
                         subprocess.check_call(
                             ["python", "-m", "pip", "install", package]
                         )
-                        print(f"{package} 설치 완료!")
+                        print(f"{package} " + self.tr("설치 완료!"))
 
                     QMessageBox.information(
-                        None, "설치 완료", "모든 필요한 패키지가 설치되었습니다."
+                        None,
+                        self.tr("설치 완료"),
+                        self.tr("모든 필요한 패키지가 설치되었습니다."),
                     )
                 except Exception as e:
                     QMessageBox.warning(
                         None,
-                        "설치 오류",
-                        f"패키지 설치 중 오류가 발생했습니다: {str(e)}",
+                        self.tr("설치 오류"),
+                        self.tr("패키지 설치 중 오류가 발생했습니다:") + f" {str(e)}",
                     )
 
     def unload(self):
