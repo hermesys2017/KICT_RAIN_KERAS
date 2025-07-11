@@ -207,38 +207,11 @@ class Ui_Dialog(object):
         self.pushButton.setShortcut(QCoreApplication.translate("Dialog", "P", None))
         # endif // QT_CONFIG(shortcut)
         self.pushButton_2.setText(QCoreApplication.translate("Dialog", "&Cancel", None))
-        self.comboBox.setItemText(
-            0,
-            QCoreApplication.translate(
-                "Dialog", "RDR_CMP_HSP_PUB_202208082130-525x625-1km.asc", None
-            ),
-        )
-
-        self.comboBox.setCurrentText(
-            QCoreApplication.translate(
-                "Dialog", "RDR_CMP_HSP_PUB_202208082130-525x625-1km.asc", None
-            )
-        )
-        self.comboBox_2.setItemText(
-            0,
-            QCoreApplication.translate(
-                "Dialog", "RDR_CMP_HSP_PUB_202208082140-525x625-1km.asc", None
-            ),
-        )
-
-        self.comboBox_3.setItemText(
-            0,
-            QCoreApplication.translate(
-                "Dialog", "RDR_CMP_HSP_PUB_202208082150-525x625-1km.asc", None
-            ),
-        )
-
-        self.comboBox_4.setItemText(
-            0,
-            QCoreApplication.translate(
-                "Dialog", "RDR_CMP_HSP_PUB_202208082200-525x625-1km.asc", None
-            ),
-        )
+        # ComboBox 초기값을 빈 값으로 설정
+        self.comboBox.clear()
+        self.comboBox_2.clear()
+        self.comboBox_3.clear()
+        self.comboBox_4.clear()
 
         self.label_4.setText(
             QCoreApplication.translate("Dialog", "Data from 30 minutes ago", None)
