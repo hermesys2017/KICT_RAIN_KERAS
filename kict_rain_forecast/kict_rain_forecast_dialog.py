@@ -81,6 +81,7 @@ class KictRainPredictorDialog(QtWidgets.QDialog, Ui_Dialog):
         # 버튼 연결
         self.pushButton_5.clicked.connect(self.select_output_folder)
         self.pushButton_download.clicked.connect(self.download_models)
+        self.pushButton.clicked.connect(self.run_prediction)
 
         # 파일 선택 버튼 연결
         self.pushButton_file1.clicked.connect(lambda: self.select_input_file(1))
@@ -328,36 +329,41 @@ class KictRainPredictorDialog(QtWidgets.QDialog, Ui_Dialog):
         """모델 설치 상태를 확인하고 UI를 업데이트합니다."""
         # 모델 디렉토리가 없으면 생성
         if not os.path.exists(self.models_dir):
-            os.makedirs(self.models_dir, exist_ok=True)
+            os.makedirs(self.models_dir)
         if not os.path.exists(self.ensemble_dir):
-            os.makedirs(self.ensemble_dir, exist_ok=True)
+            os.makedirs(self.ensemble_dir)
 
         # Single Target 모델 (RainVer1TfliteModel) 확인
         single_model_path = os.path.join(self.models_dir, "model-best.tflite")
-        single_model_installed = os.path.exists(single_model_path)
+        ver1_installed = os.path.exists(single_model_path)
 
         # Multi Target 모델 (RainVer2Model) 확인
-        multi_model_installed = os.path.exists(self.ensemble_dir)
+        ver2_installed = os.path.exists(self.ensemble_dir)
 
-        if multi_model_installed:
+        if ver2_installed:
             # 모든 앙상블 모델 파일이 있는지 확인
             multi_model_files = [
                 f"model-best_fcst_{i}min.tflite" for i in range(10, 190, 10)
             ]
-            multi_model_installed = all(
+            ver2_installed = all(
                 os.path.exists(os.path.join(self.ensemble_dir, f))
                 for f in multi_model_files
             )
 
+        # 선택된 모델에 따라 Predict 버튼 활성화/비활성화
+        if self.radioButton_2.isChecked():  # Single Target
+            self.pushButton.setEnabled(ver1_installed)
+        else:  # Multi Target
+            self.pushButton.setEnabled(ver2_installed)
+
         # 모델 상태 메시지 업데이트
-        status_msg = ""
-        if single_model_installed and multi_model_installed:
+        if ver1_installed and ver2_installed:
             status_msg = "모델 상태: 모든 모델이 설치되어 있습니다."
             self.pushButton_download.setEnabled(False)
-        elif single_model_installed:
+        elif ver1_installed:
             status_msg = "모델 상태: Single Target 모델만 설치되어 있습니다."
             self.pushButton_download.setEnabled(True)
-        elif multi_model_installed:
+        elif ver2_installed:
             status_msg = "모델 상태: Multi Target 모델만 설치되어 있습니다."
             self.pushButton_download.setEnabled(True)
         else:
@@ -365,3 +371,65 @@ class KictRainPredictorDialog(QtWidgets.QDialog, Ui_Dialog):
             self.pushButton_download.setEnabled(True)
 
         self.label_model_status.setText(status_msg)
+
+        return ver1_installed, ver2_installed
+
+    def run_prediction(self):
+        """예측 버튼 클릭 시 실행되는 함수입니다."""
+        # 입력 파일 경로 가져오기
+        input_files = [
+            self.get_full_file_path(self.comboBox),
+            self.get_full_file_path(self.comboBox_2),
+            self.get_full_file_path(self.comboBox_3),
+            self.get_full_file_path(self.comboBox_4),
+        ]
+
+        # 출력 폴더 경로 가져오기
+        output_path = self.lineEdit_5.text()
+
+        # 파일 경로 및 출력 폴더 유효성 검사
+        if not all(input_files) or not output_path:
+            QMessageBox.warning(
+                self, "입력 오류", "모든 입력 파일과 출력 폴더를 지정해야 합니다."
+            )
+            return
+
+        if not os.path.exists(output_path):
+            QMessageBox.warning(
+                self, "경로 오류", f"출력 폴더 {output_path}가 존재하지 않습니다."
+            )
+            return
+
+        # 모델 디렉토리 경로 설정
+
+        try:
+            # 선택된 모델에 따라 적절한 함수 호출
+            from kict_rain_forecast.services.predict import ver1_tflite_main, ver2_main
+
+            # 예측 시작 메시지 표시
+            self.label_model_status.setText("예측 중... 잠시만 기다려주세요.")
+            QtWidgets.QApplication.processEvents()  # UI 업데이트
+
+            if self.radioButton_2.isChecked():  # Single Target
+                # Ver1 TFLite 모델 사용
+                model_path = os.path.join(self.models_dir, "model-best.tflite")
+                ver1_tflite_main(input_files, model_path, output_path)
+            else:  # Multi Target
+                # Ver2 모델 사용
+                model_path_dir = self.ensemble_dir
+                ver2_main(input_files, model_path_dir, output_path)
+
+            # 성공 메시지 표시
+            QMessageBox.information(
+                self,
+                "예측 완료",
+                f"예측이 완료되었습니다.\n결과는 {output_path} 폴더에 저장되었습니다.",
+            )
+            self.label_model_status.setText("예측 완료")
+
+        except Exception as e:
+            # 오류 메시지 표시
+            QMessageBox.critical(
+                self, "오류 발생", f"예측 중 오류가 발생했습니다:\n{str(e)}"
+            )
+            self.label_model_status.setText("오류 발생")

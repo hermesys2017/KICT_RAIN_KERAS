@@ -12,9 +12,9 @@ def ver1_main(files, model_path, output_path):
     model.save_prediction_files(input_data, output_path)
 
 
-def ver2_main(files, model_path, output_path):
+def ver2_main(files, model_path_dir, output_path):
     input_data = dataset(files)
-    model = RainVer2Model(model_path)
+    model = RainVer2Model(model_path_dir)
     model.save_prediction_files(input_data, output_path)
 
 
