@@ -34,27 +34,29 @@ from kict_rain_forecast.kict_rain_forecast_dialog_base import Ui_Dialog
 
 class KictRainPredictorDialog(QtWidgets.QDialog, Ui_Dialog):
     # 모델 다운로드 URL
-    SINGLE_TARGET_MODEL_URL = "https://drive.google.com/file/d/1CxbdCAe8kRBqGQNEXVd-dHkKL8ISi_dq/view?usp=drive_link"
+    SINGLE_TARGET_MODEL_URL = (
+        "https://drive.google.com/uc?id=1CxbdCAe8kRBqGQNEXVd-dHkKL8ISi_dq"
+    )
     MULTI_TARGET_MODEL_URLS = {
         # 10분 간격으로 10분~180분까지의 모델 URL
-        10: "https://drive.google.com/file/d/14Cz1yDCtrbI3KoHlU4GiNXwyCVKS-clX/view?usp=drive_link",
-        20: "https://drive.google.com/file/d/11FNN6ekYG5gpmONQCozPQYc2FH-zLNlM/view?usp=drive_link",
-        30: "https://drive.google.com/file/d/1zsQjoh_nqqEa-9fz91P24xx1FoyDKB_G/view?usp=drive_link",
-        40: "https://drive.google.com/file/d/1FvcROg3Sal2NBAKXG3qRoPsVyIGfph5q/view?usp=drive_link",
-        50: "https://drive.google.com/file/d/1pixZOvE87vFUHLDdei-yvCisBuUJuthM/view?usp=drive_link",
-        60: "https://drive.google.com/file/d/13YWC2efMsKvbNpZ5L_daGkJ0Bpujezqc/view?usp=drive_link",
-        70: "https://drive.google.com/file/d/1MjzRQb1FWz0lKoaAGhiS23TvIjYncGB7/view?usp=drive_link",
-        80: "https://drive.google.com/file/d/1JUrlUDe1EYvoOkQj1jKRerLu5a4F3-as/view?usp=drive_link",
-        90: "https://drive.google.com/file/d/1xzxRDR_YZWz-2oiPEpjTUKQAUHe4-PHj/view?usp=drive_link",
-        100: "https://drive.google.com/file/d/1HlPbS1hlFruMS9uNAjUp20WmHtMoiSwR/view?usp=drive_link",
-        110: "https://drive.google.com/file/d/1DK2YSAKqDOWBhlH9BkfD0oJX2yzhnG7Z/view?usp=drive_link",
-        120: "https://drive.google.com/file/d/1t4KnIHIn3mWChzpJh4v20CB9lhsF84v6/view?usp=drive_link",
-        130: "https://drive.google.com/file/d/14HPeJjzE50ziTQOWs4HhwiK_ftHYIeq3/view?usp=drive_link",
-        140: "https://drive.google.com/file/d/1Ep721RZV3CpFy23se47jG8m9qQiygxAb/view?usp=drive_link",
-        150: "https://drive.google.com/file/d/1pCeW1umNiudMD7yWDHF-hfgb5sXW3YKC/view?usp=drive_link",
-        160: "https://drive.google.com/file/d/1GxzveX6pQeqqoVuvdj2qUeURJOgDTffp/view?usp=drive_link",
-        170: "https://drive.google.com/file/d/1h33EX7ZUlw-OJzgGUHKC6xYQkhJsoUWW/view?usp=drive_link",
-        180: "https://drive.google.com/file/d/1oHvK5CqXKVbbVW5eQtfyzoAp_RPaouZC/view?usp=drive_link",
+        10: "https://drive.google.com/uc?id=14Cz1yDCtrbI3KoHlU4GiNXwyCVKS-clX",
+        20: "https://drive.google.com/uc?id=11FNN6ekYG5gpmONQCozPQYc2FH-zLNlM",
+        30: "https://drive.google.com/uc?id=1zsQjoh_nqqEa-9fz91P24xx1FoyDKB_G",
+        40: "https://drive.google.com/uc?id=1FvcROg3Sal2NBAKXG3qRoPsVyIGfph5q",
+        50: "https://drive.google.com/uc?id=1pixZOvE87vFUHLDdei-yvCisBuUJuthM",
+        60: "https://drive.google.com/uc?id=13YWC2efMsKvbNpZ5L_daGkJ0Bpujezqc",
+        70: "https://drive.google.com/uc?id=1MjzRQb1FWz0lKoaAGhiS23TvIjYncGB7",
+        80: "https://drive.google.com/uc?id=1JUrlUDe1EYvoOkQj1jKRerLu5a4F3-as",
+        90: "https://drive.google.com/uc?id=1xzxRDR_YZWz-2oiPEpjTUKQAUHe4-PHj",
+        100: "https://drive.google.com/uc?id=1HlPbS1hlFruMS9uNAjUp20WmHtMoiSwR",
+        110: "https://drive.google.com/uc?id=1DK2YSAKqDOWBhlH9BkfD0oJX2yzhnG7Z",
+        120: "https://drive.google.com/uc?id=1t4KnIHIn3mWChzpJh4v20CB9lhsF84v6",
+        130: "https://drive.google.com/uc?id=14HPeJjzE50ziTQOWs4HhwiK_ftHYIeq3",
+        140: "https://drive.google.com/uc?id=1Ep721RZV3CpFy23se47jG8m9qQiygxAb",
+        150: "https://drive.google.com/uc?id=1pCeW1umNiudMD7yWDHF-hfgb5sXW3YKC",
+        160: "https://drive.google.com/uc?id=1GxzveX6pQeqqoVuvdj2qUeURJOgDTffp",
+        170: "https://drive.google.com/uc?id=1h33EX7ZUlw-OJzgGUHKC6xYQkhJsoUWW",
+        180: "https://drive.google.com/uc?id=1oHvK5CqXKVbbVW5eQtfyzoAp_RPaouZC",
     }
 
     def __init__(self, parent=None):
