@@ -12,10 +12,13 @@ from qgis.PyQt.QtCore import QCoreApplication, QMetaObject, QRect
 from qgis.PyQt.QtWidgets import (
     QCheckBox,
     QComboBox,
+    QGroupBox,
+    QHBoxLayout,
     QLabel,
     QLineEdit,
     QPushButton,
     QRadioButton,
+    QVBoxLayout,
 )
 
 
@@ -34,9 +37,6 @@ class Ui_Dialog(object):
         self.label = QLabel(Dialog)
         self.label.setObjectName("label")
         self.label.setGeometry(QRect(20, 230, 141, 16))
-        self.label_2 = QLabel(Dialog)
-        self.label_2.setObjectName("label_2")
-        self.label_2.setGeometry(QRect(20, 10, 131, 16))
         self.label_3 = QLabel(Dialog)
         self.label_3.setObjectName("label_3")
         self.label_3.setGeometry(QRect(20, 350, 131, 16))
@@ -52,34 +52,108 @@ class Ui_Dialog(object):
         self.pushButton_2 = QPushButton(Dialog)
         self.pushButton_2.setObjectName("pushButton_2")
         self.pushButton_2.setGeometry(QRect(540, 480, 75, 23))
-        self.comboBox = QComboBox(Dialog)
+        # 입력 데이터 그룹박스 생성
+        self.groupBox_input = QGroupBox(Dialog)
+        self.groupBox_input.setObjectName("groupBox_input")
+        self.groupBox_input.setGeometry(QRect(20, 30, 590, 200))
+        self.groupBox_input.setTitle("입력 데이터 파일")
+
+        # 입력 데이터 레이아웃 설정
+        self.verticalLayout_input = QVBoxLayout(self.groupBox_input)
+        self.verticalLayout_input.setObjectName("verticalLayout_input")
+
+        # 첫 번째 파일 선택 (30분 전 데이터)
+        self.horizontalLayout_1 = QHBoxLayout()
+        self.label_4 = QLabel(self.groupBox_input)
+        self.label_4.setObjectName("label_4")
+        self.label_4.setMinimumWidth(150)
+        self.horizontalLayout_1.addWidget(self.label_4)
+
+        self.comboBox = QComboBox(self.groupBox_input)
         self.comboBox.addItem("")
         self.comboBox.setObjectName("comboBox")
-        self.comboBox.setGeometry(QRect(30, 50, 451, 22))
-        self.comboBox_2 = QComboBox(Dialog)
+        self.comboBox.setEditable(True)
+        self.horizontalLayout_1.addWidget(self.comboBox)
+
+        self.pushButton_file1 = QPushButton(self.groupBox_input)
+        self.pushButton_file1.setObjectName("pushButton_file1")
+        self.pushButton_file1.setText("...")
+        self.pushButton_file1.setMaximumWidth(30)
+        self.horizontalLayout_1.addWidget(self.pushButton_file1)
+
+        self.verticalLayout_input.addLayout(self.horizontalLayout_1)
+
+        # 두 번째 파일 선택 (20분 전 데이터)
+        self.horizontalLayout_2 = QHBoxLayout()
+        self.label_5 = QLabel(self.groupBox_input)
+        self.label_5.setObjectName("label_5")
+        self.label_5.setMinimumWidth(150)
+        self.horizontalLayout_2.addWidget(self.label_5)
+
+        self.comboBox_2 = QComboBox(self.groupBox_input)
         self.comboBox_2.addItem("")
         self.comboBox_2.setObjectName("comboBox_2")
-        self.comboBox_2.setGeometry(QRect(30, 100, 451, 22))
-        self.comboBox_3 = QComboBox(Dialog)
+        self.comboBox_2.setEditable(True)
+        self.horizontalLayout_2.addWidget(self.comboBox_2)
+
+        self.pushButton_file2 = QPushButton(self.groupBox_input)
+        self.pushButton_file2.setObjectName("pushButton_file2")
+        self.pushButton_file2.setText("...")
+        self.pushButton_file2.setMaximumWidth(30)
+        self.horizontalLayout_2.addWidget(self.pushButton_file2)
+
+        self.verticalLayout_input.addLayout(self.horizontalLayout_2)
+
+        # 세 번째 파일 선택 (10분 전 데이터)
+        self.horizontalLayout_3 = QHBoxLayout()
+        self.label_6 = QLabel(self.groupBox_input)
+        self.label_6.setObjectName("label_6")
+        self.label_6.setMinimumWidth(150)
+        self.horizontalLayout_3.addWidget(self.label_6)
+
+        self.comboBox_3 = QComboBox(self.groupBox_input)
         self.comboBox_3.addItem("")
         self.comboBox_3.setObjectName("comboBox_3")
-        self.comboBox_3.setGeometry(QRect(30, 150, 451, 22))
-        self.comboBox_4 = QComboBox(Dialog)
+        self.comboBox_3.setEditable(True)
+        self.horizontalLayout_3.addWidget(self.comboBox_3)
+
+        self.pushButton_file3 = QPushButton(self.groupBox_input)
+        self.pushButton_file3.setObjectName("pushButton_file3")
+        self.pushButton_file3.setText("...")
+        self.pushButton_file3.setMaximumWidth(30)
+        self.horizontalLayout_3.addWidget(self.pushButton_file3)
+
+        self.verticalLayout_input.addLayout(self.horizontalLayout_3)
+
+        # 네 번째 파일 선택 (예측 시점 데이터)
+        self.horizontalLayout_4 = QHBoxLayout()
+        self.label_7 = QLabel(self.groupBox_input)
+        self.label_7.setObjectName("label_7")
+        self.label_7.setMinimumWidth(150)
+        self.horizontalLayout_4.addWidget(self.label_7)
+
+        self.comboBox_4 = QComboBox(self.groupBox_input)
         self.comboBox_4.addItem("")
         self.comboBox_4.setObjectName("comboBox_4")
-        self.comboBox_4.setGeometry(QRect(30, 200, 451, 22))
-        self.label_4 = QLabel(Dialog)
-        self.label_4.setObjectName("label_4")
-        self.label_4.setGeometry(QRect(30, 30, 151, 16))
-        self.label_5 = QLabel(Dialog)
-        self.label_5.setObjectName("label_5")
-        self.label_5.setGeometry(QRect(30, 80, 151, 16))
-        self.label_6 = QLabel(Dialog)
-        self.label_6.setObjectName("label_6")
-        self.label_6.setGeometry(QRect(30, 130, 151, 16))
-        self.label_7 = QLabel(Dialog)
-        self.label_7.setObjectName("label_7")
-        self.label_7.setGeometry(QRect(30, 180, 151, 16))
+        self.comboBox_4.setEditable(True)
+        self.horizontalLayout_4.addWidget(self.comboBox_4)
+
+        self.pushButton_file4 = QPushButton(self.groupBox_input)
+        self.pushButton_file4.setObjectName("pushButton_file4")
+        self.pushButton_file4.setText("...")
+        self.pushButton_file4.setMaximumWidth(30)
+        self.horizontalLayout_4.addWidget(self.pushButton_file4)
+
+        self.verticalLayout_input.addLayout(self.horizontalLayout_4)
+
+        # 일괄 파일 선택 버튼
+        self.horizontalLayout_batch = QHBoxLayout()
+        self.pushButton_batch = QPushButton(self.groupBox_input)
+        self.pushButton_batch.setObjectName("pushButton_batch")
+        self.pushButton_batch.setText("일괄 파일 선택")
+        self.horizontalLayout_batch.addWidget(self.pushButton_batch)
+        self.verticalLayout_input.addLayout(self.horizontalLayout_batch)
+        # 라벨들은 이제 각 horizontalLayout 내에서 생성됨
         self.checkBox = QCheckBox(Dialog)
         self.checkBox.setObjectName("checkBox")
         self.checkBox.setGeometry(QRect(30, 440, 221, 16))
@@ -111,7 +185,6 @@ class Ui_Dialog(object):
             QCoreApplication.translate("Dialog", "Single Target", None)
         )
         self.label.setText(QCoreApplication.translate("Dialog", "Model Select", None))
-        self.label_2.setText(QCoreApplication.translate("Dialog", "Input Data", None))
         self.label_3.setText(
             QCoreApplication.translate("Dialog", "Output Folder", None)
         )
@@ -119,6 +192,16 @@ class Ui_Dialog(object):
             QCoreApplication.translate("Dialog", "C:\\User\\Downloads", None)
         )
         self.pushButton_5.setText(QCoreApplication.translate("Dialog", "...", None))
+        self.pushButton_file1.setText(QCoreApplication.translate("Dialog", "...", None))
+        self.pushButton_file2.setText(QCoreApplication.translate("Dialog", "...", None))
+        self.pushButton_file3.setText(QCoreApplication.translate("Dialog", "...", None))
+        self.pushButton_file4.setText(QCoreApplication.translate("Dialog", "...", None))
+        self.pushButton_batch.setText(
+            QCoreApplication.translate("Dialog", "일괄 파일 선택", None)
+        )
+        self.groupBox_input.setTitle(
+            QCoreApplication.translate("Dialog", "입력 데이터 파일", None)
+        )
         self.pushButton.setText(QCoreApplication.translate("Dialog", "&Predict", None))
         # if QT_CONFIG(shortcut)
         self.pushButton.setShortcut(QCoreApplication.translate("Dialog", "P", None))

@@ -22,6 +22,7 @@
  ***************************************************************************/
 """
 
+import glob
 import os
 import threading
 
@@ -66,6 +67,9 @@ class KictRainPredictorDialog(QtWidgets.QDialog, Ui_Dialog):
         # After self.setupUi() you can access any designer object by doing
         # self.<objectname>, and you can use autoconnect slots - see
         # http://qt-project.org/doc/qt-4.8/designer-using-a-ui-file.html
+
+        # 최근 사용한 디렉토리 경로 저장 변수
+        self.last_used_directory = os.path.expanduser("~")
         # #widgets-and-dialogs-with-auto-connect
         self.setupUi(self)
 
@@ -74,13 +78,19 @@ class KictRainPredictorDialog(QtWidgets.QDialog, Ui_Dialog):
         self.models_dir = os.path.join(self.plugin_dir, "models")
         self.ensemble_dir = os.path.join(self.models_dir, "ensemble")
 
-        # 출력 폴더 선택 버튼 연결
+        # 버튼 연결
         self.pushButton_5.clicked.connect(self.select_output_folder)
-
-        # 모델 다운로드 버튼 연결
         self.pushButton_download.clicked.connect(self.download_models)
 
-        # 라디오 버튼 상태 변경 시 모델 상태 업데이트
+        # 파일 선택 버튼 연결
+        self.pushButton_file1.clicked.connect(lambda: self.select_input_file(1))
+        self.pushButton_file2.clicked.connect(lambda: self.select_input_file(2))
+        self.pushButton_file3.clicked.connect(lambda: self.select_input_file(3))
+        self.pushButton_file4.clicked.connect(lambda: self.select_input_file(4))
+        self.pushButton_batch.clicked.connect(self.select_batch_files)
+
+        # 모델 설치 상태 확인
+        self.check_model_installation()
         self.radioButton.toggled.connect(self.check_model_installation)
         self.radioButton_2.toggled.connect(self.check_model_installation)
 
@@ -90,8 +100,115 @@ class KictRainPredictorDialog(QtWidgets.QDialog, Ui_Dialog):
     def select_output_folder(self):
         """출력 폴더 선택 대화상자를 표시합니다."""
         folder = QFileDialog.getExistingDirectory(
-            self, "출력 폴더 선택", self.lineEdit_5.text()
+            self, "출력 폴더 선택", self.last_used_directory
         )
+        if folder:
+            self.lineEdit_5.setText(folder)
+            self.last_used_directory = folder
+
+    def select_input_file(self, file_num):
+        """입력 파일 선택 대화상자를 표시합니다.
+
+        Args:
+            file_num: 파일 번호 (1-4)
+        """
+        file_filter = "ASC 파일 (*.asc);;모든 파일 (*.*)"
+        file_path, _ = QFileDialog.getOpenFileName(
+            self, f"입력 파일 {file_num} 선택", self.last_used_directory, file_filter
+        )
+        if file_path:
+            # 파일 경로에서 디렉토리 부분 저장
+            self.last_used_directory = os.path.dirname(file_path)
+
+            # 해당 comboBox에 파일 경로 추가
+            if file_num == 1:
+                combo_box = self.comboBox
+            else:
+                combo_box = getattr(self, f"comboBox_{file_num}")
+
+            # 이미 목록에 있는지 확인
+            file_name = os.path.basename(file_path)
+            found = False
+            for i in range(combo_box.count()):
+                if combo_box.itemText(i) == file_name:
+                    combo_box.setCurrentIndex(i)
+                    found = True
+                    break
+
+            # 목록에 없으면 추가
+            if not found:
+                combo_box.addItem(file_name)
+                combo_box.setCurrentText(file_name)
+
+            # 전체 경로를 데이터로 저장
+            combo_box.setItemData(combo_box.currentIndex(), file_path)
+
+    def select_batch_files(self):
+        """일괄 파일 선택 대화상자를 표시합니다."""
+        folder = QFileDialog.getExistingDirectory(
+            self, "레이더 데이터 폴더 선택", self.last_used_directory
+        )
+        if not folder:
+            return
+
+        self.last_used_directory = folder
+
+        # 폴더 내의 모든 .asc 파일 찾기
+        asc_files = sorted(glob.glob(os.path.join(folder, "*.asc")))
+
+        if not asc_files:
+            QMessageBox.warning(
+                self, "파일 없음", f"{folder} 폴더에 ASC 파일이 없습니다."
+            )
+            return
+
+        # 파일이 4개 이상인 경우 선택 대화상자 표시
+        if len(asc_files) >= 4:
+            # 시간순으로 정렬된 파일 목록에서 최근 4개 선택
+            selected_files = asc_files[-4:]
+
+            # 파일 순서 확인 메시지
+            msg = "다음 파일들이 선택되었습니다:\n\n"
+            msg += f"30분 전 데이터: {os.path.basename(selected_files[0])}\n"
+            msg += f"20분 전 데이터: {os.path.basename(selected_files[1])}\n"
+            msg += f"10분 전 데이터: {os.path.basename(selected_files[2])}\n"
+            msg += f"예측 시점 데이터: {os.path.basename(selected_files[3])}\n\n"
+            msg += "파일 순서가 올바른지 확인하세요."
+
+            QMessageBox.information(self, "파일 선택 완료", msg)
+
+            # 각 comboBox에 파일 설정
+            combo_boxes = [
+                self.comboBox,
+                self.comboBox_2,
+                self.comboBox_3,
+                self.comboBox_4,
+            ]
+            for i, file_path in enumerate(selected_files):
+                file_name = os.path.basename(file_path)
+
+                # 이미 목록에 있는지 확인
+                combo_box = combo_boxes[i]
+                found = False
+                for j in range(combo_box.count()):
+                    if combo_box.itemText(j) == file_name:
+                        combo_box.setCurrentIndex(j)
+                        combo_box.setItemData(j, file_path)
+                        found = True
+                        break
+
+                # 목록에 없으면 추가
+                if not found:
+                    combo_box.addItem(file_name)
+                    combo_box.setCurrentText(file_name)
+                    combo_box.setItemData(combo_box.currentIndex(), file_path)
+        else:
+            QMessageBox.warning(
+                self,
+                "파일 부족",
+                f"{folder} 폴더에 ASC 파일이 4개 미만입니다.\n"
+                "4개 이상의 파일이 필요합니다.",
+            )
         if folder:
             self.lineEdit_5.setText(folder)
 
@@ -182,6 +299,30 @@ class KictRainPredictorDialog(QtWidgets.QDialog, Ui_Dialog):
 
         # 모델 설치 상태 업데이트
         self.check_model_installation()
+
+    def get_full_file_path(self, combo_box):
+        """콤보박스에서 선택된 파일의 전체 경로를 반환합니다.
+
+        Args:
+            combo_box: 콤보박스 객체
+
+        Returns:
+            str: 파일의 전체 경로 또는 None
+        """
+        if combo_box.currentIndex() >= 0:
+            # 데이터로 저장된 전체 경로가 있는지 확인
+            file_path = combo_box.itemData(combo_box.currentIndex())
+            if file_path:
+                return file_path
+
+            # 데이터가 없으면 파일명만 있는 것으로 간주
+            file_name = combo_box.currentText()
+            if file_name:
+                # 마지막 사용 디렉토리에서 파일 찾기 시도
+                possible_path = os.path.join(self.last_used_directory, file_name)
+                if os.path.exists(possible_path):
+                    return possible_path
+        return None
 
     def check_model_installation(self):
         """모델 설치 상태를 확인하고 UI를 업데이트합니다."""
