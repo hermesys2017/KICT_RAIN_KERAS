@@ -175,7 +175,7 @@ class KictRainPredictor:
 
     def check_and_install_dependencies(self):
         """필요한 패키지가 설치되어 있는지 확인하고, 없으면 설치합니다."""
-        required_packages = ["gdown", "tensorflow", "numpy", "keras"]
+        required_packages = ["gdown", "tensorflow", "numpy"]
         missing_packages = []
 
         for package in required_packages:

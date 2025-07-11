@@ -8,16 +8,22 @@
 ## WARNING! All changes made in this file will be lost when recompiling UI file!
 ################################################################################
 
-from qgis.PyQt.QtCore import *
-from qgis.PyQt.QtGui import *
-from qgis.PyQt.QtWidgets import *
+from qgis.PyQt.QtCore import QCoreApplication, QMetaObject, QRect
+from qgis.PyQt.QtWidgets import (
+    QCheckBox,
+    QComboBox,
+    QLabel,
+    QLineEdit,
+    QPushButton,
+    QRadioButton,
+)
 
 
 class Ui_Dialog(object):
     def setupUi(self, Dialog):
         if not Dialog.objectName():
             Dialog.setObjectName("Dialog")
-        Dialog.resize(630, 461)
+        Dialog.resize(630, 520)
         self.radioButton = QRadioButton(Dialog)
         self.radioButton.setObjectName("radioButton")
         self.radioButton.setGeometry(QRect(40, 260, 101, 16))
@@ -33,19 +39,19 @@ class Ui_Dialog(object):
         self.label_2.setGeometry(QRect(20, 10, 131, 16))
         self.label_3 = QLabel(Dialog)
         self.label_3.setObjectName("label_3")
-        self.label_3.setGeometry(QRect(20, 310, 131, 16))
+        self.label_3.setGeometry(QRect(20, 350, 131, 16))
         self.lineEdit_5 = QLineEdit(Dialog)
         self.lineEdit_5.setObjectName("lineEdit_5")
-        self.lineEdit_5.setGeometry(QRect(30, 350, 411, 20))
+        self.lineEdit_5.setGeometry(QRect(30, 380, 411, 20))
         self.pushButton_5 = QPushButton(Dialog)
         self.pushButton_5.setObjectName("pushButton_5")
-        self.pushButton_5.setGeometry(QRect(450, 350, 31, 23))
+        self.pushButton_5.setGeometry(QRect(450, 380, 31, 23))
         self.pushButton = QPushButton(Dialog)
         self.pushButton.setObjectName("pushButton")
-        self.pushButton.setGeometry(QRect(450, 420, 75, 23))
+        self.pushButton.setGeometry(QRect(450, 480, 75, 23))
         self.pushButton_2 = QPushButton(Dialog)
         self.pushButton_2.setObjectName("pushButton_2")
-        self.pushButton_2.setGeometry(QRect(540, 420, 75, 23))
+        self.pushButton_2.setGeometry(QRect(540, 480, 75, 23))
         self.comboBox = QComboBox(Dialog)
         self.comboBox.addItem("")
         self.comboBox.setObjectName("comboBox")
@@ -76,7 +82,17 @@ class Ui_Dialog(object):
         self.label_7.setGeometry(QRect(30, 180, 151, 16))
         self.checkBox = QCheckBox(Dialog)
         self.checkBox.setObjectName("checkBox")
-        self.checkBox.setGeometry(QRect(30, 390, 221, 16))
+        self.checkBox.setGeometry(QRect(30, 440, 221, 16))
+
+        # 모델 상태 표시 라벨
+        self.label_model_status = QLabel(Dialog)
+        self.label_model_status.setObjectName("label_model_status")
+        self.label_model_status.setGeometry(QRect(40, 290, 400, 16))
+
+        # 모델 다운로드 버튼
+        self.pushButton_download = QPushButton(Dialog)
+        self.pushButton_download.setObjectName("pushButton_download")
+        self.pushButton_download.setGeometry(QRect(450, 290, 120, 23))
 
         self.retranslateUi(Dialog)
 
@@ -155,6 +171,14 @@ class Ui_Dialog(object):
         )
         self.checkBox.setText(
             QCoreApplication.translate("Dialog", "Add results to the map", None)
+        )
+
+        # 새로 추가된 위젯 텍스트 설정
+        self.label_model_status.setText(
+            QCoreApplication.translate("Dialog", "모델 상태: 확인 중...", None)
+        )
+        self.pushButton_download.setText(
+            QCoreApplication.translate("Dialog", "모델 다운로드", None)
         )
 
     # retranslateUi

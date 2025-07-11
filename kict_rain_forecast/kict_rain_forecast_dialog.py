@@ -22,12 +22,43 @@
  ***************************************************************************/
 """
 
-from qgis.PyQt import QtWidgets
+import os
+import threading
+
+import gdown
+from qgis.PyQt import QtCore, QtWidgets
+from qgis.PyQt.QtWidgets import QFileDialog, QMessageBox
 
 from kict_rain_forecast.kict_rain_forecast_dialog_base import Ui_Dialog
 
 
 class KictRainPredictorDialog(QtWidgets.QDialog, Ui_Dialog):
+    # 모델 다운로드 URL
+    SINGLE_TARGET_MODEL_URL = (
+        "https://drive.google.com/uc?id=1CxbdCAe8kRBqGQNEXVd-dHkKL8ISi_dq"
+    )
+    MULTI_TARGET_MODEL_URLS = {
+        # 10분 간격으로 10분~180분까지의 모델 URL
+        10: "https://drive.google.com/file/d/14Cz1yDCtrbI3KoHlU4GiNXwyCVKS-clX/view?usp=drive_link",
+        20: "https://drive.google.com/file/d/11FNN6ekYG5gpmONQCozPQYc2FH-zLNlM/view?usp=drive_link",
+        30: "https://drive.google.com/file/d/1zsQjoh_nqqEa-9fz91P24xx1FoyDKB_G/view?usp=drive_link",
+        40: "https://drive.google.com/file/d/1FvcROg3Sal2NBAKXG3qRoPsVyIGfph5q/view?usp=drive_link",
+        50: "https://drive.google.com/file/d/1pixZOvE87vFUHLDdei-yvCisBuUJuthM/view?usp=drive_link",
+        60: "https://drive.google.com/file/d/13YWC2efMsKvbNpZ5L_daGkJ0Bpujezqc/view?usp=drive_link",
+        70: "https://drive.google.com/file/d/1MjzRQb1FWz0lKoaAGhiS23TvIjYncGB7/view?usp=drive_link",
+        80: "https://drive.google.com/file/d/1JUrlUDe1EYvoOkQj1jKRerLu5a4F3-as/view?usp=drive_link",
+        90: "https://drive.google.com/file/d/1xzxRDR_YZWz-2oiPEpjTUKQAUHe4-PHj/view?usp=drive_link",
+        100: "https://drive.google.com/file/d/1HlPbS1hlFruMS9uNAjUp20WmHtMoiSwR/view?usp=drive_link",
+        110: "https://drive.google.com/file/d/1DK2YSAKqDOWBhlH9BkfD0oJX2yzhnG7Z/view?usp=drive_link",
+        120: "https://drive.google.com/file/d/1t4KnIHIn3mWChzpJh4v20CB9lhsF84v6/view?usp=drive_link",
+        130: "https://drive.google.com/file/d/14HPeJjzE50ziTQOWs4HhwiK_ftHYIeq3/view?usp=drive_link",
+        140: "https://drive.google.com/file/d/1Ep721RZV3CpFy23se47jG8m9qQiygxAb/view?usp=drive_link",
+        150: "https://drive.google.com/file/d/1pCeW1umNiudMD7yWDHF-hfgb5sXW3YKC/view?usp=drive_link",
+        160: "https://drive.google.com/file/d/1GxzveX6pQeqqoVuvdj2qUeURJOgDTffp/view?usp=drive_link",
+        170: "https://drive.google.com/file/d/1h33EX7ZUlw-OJzgGUHKC6xYQkhJsoUWW/view?usp=drive_link",
+        180: "https://drive.google.com/file/d/1oHvK5CqXKVbbVW5eQtfyzoAp_RPaouZC/view?usp=drive_link",
+    }
+
     def __init__(self, parent=None):
         """Constructor."""
         super(KictRainPredictorDialog, self).__init__(parent)
@@ -37,3 +68,159 @@ class KictRainPredictorDialog(QtWidgets.QDialog, Ui_Dialog):
         # http://qt-project.org/doc/qt-4.8/designer-using-a-ui-file.html
         # #widgets-and-dialogs-with-auto-connect
         self.setupUi(self)
+
+        # 모델 디렉토리 설정
+        self.plugin_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        self.models_dir = os.path.join(self.plugin_dir, "models")
+        self.ensemble_dir = os.path.join(self.models_dir, "ensemble")
+
+        # 출력 폴더 선택 버튼 연결
+        self.pushButton_5.clicked.connect(self.select_output_folder)
+
+        # 모델 다운로드 버튼 연결
+        self.pushButton_download.clicked.connect(self.download_models)
+
+        # 라디오 버튼 상태 변경 시 모델 상태 업데이트
+        self.radioButton.toggled.connect(self.check_model_installation)
+        self.radioButton_2.toggled.connect(self.check_model_installation)
+
+        # 초기 모델 설치 상태 확인
+        self.check_model_installation()
+
+    def select_output_folder(self):
+        """출력 폴더 선택 대화상자를 표시합니다."""
+        folder = QFileDialog.getExistingDirectory(
+            self, "출력 폴더 선택", self.lineEdit_5.text()
+        )
+        if folder:
+            self.lineEdit_5.setText(folder)
+
+    def download_models(self):
+        """선택된 모델 유형에 따라 모델을 다운로드합니다."""
+        # 모델 디렉토리가 없으면 생성
+        if not os.path.exists(self.models_dir):
+            os.makedirs(self.models_dir, exist_ok=True)
+
+        # 앙상블 모델 디렉토리가 없으면 생성
+        if not os.path.exists(self.ensemble_dir):
+            os.makedirs(self.ensemble_dir, exist_ok=True)
+
+        # 다운로드 중 UI 비활성화
+        self.setEnabled(False)
+        self.pushButton_download.setText("다운로드 중...")
+
+        # 선택된 모델 유형에 따라 다운로드 시작
+        if self.radioButton.isChecked():  # Multi Target
+            threading.Thread(target=self.download_multi_target_models).start()
+        else:  # Single Target
+            threading.Thread(target=self.download_single_target_model).start()
+
+    def download_single_target_model(self):
+        """Single Target 모델을 다운로드합니다."""
+        try:
+            output_path = os.path.join(self.models_dir, "model-best.tflite")
+            gdown.download(self.SINGLE_TARGET_MODEL_URL, output_path, quiet=False)
+
+            # UI 업데이트는 메인 스레드에서 수행
+            QtCore.QMetaObject.invokeMethod(
+                self,
+                "download_completed",
+                QtCore.Qt.QueuedConnection,
+                QtCore.Q_ARG(bool, True),
+                QtCore.Q_ARG(str, "Single Target 모델 다운로드가 완료되었습니다."),
+            )
+        except Exception as e:
+            # 오류 발생 시 메인 스레드에서 처리
+            QtCore.QMetaObject.invokeMethod(
+                self,
+                "download_completed",
+                QtCore.Qt.QueuedConnection,
+                QtCore.Q_ARG(bool, False),
+                QtCore.Q_ARG(str, f"다운로드 중 오류가 발생했습니다: {str(e)}"),
+            )
+
+    def download_multi_target_models(self):
+        """Multi Target 모델(앙상블 모델)을 다운로드합니다."""
+        try:
+            # 18개 모델 다운로드
+            for minutes, url in self.MULTI_TARGET_MODEL_URLS.items():
+                output_path = os.path.join(
+                    self.ensemble_dir, f"model-best_fcst_{minutes}min.tflite"
+                )
+                gdown.download(url, output_path, quiet=False)
+
+            # UI 업데이트는 메인 스레드에서 수행
+            QtCore.QMetaObject.invokeMethod(
+                self,
+                "download_completed",
+                QtCore.Qt.QueuedConnection,
+                QtCore.Q_ARG(bool, True),
+                QtCore.Q_ARG(str, "Multi Target 모델 다운로드가 완료되었습니다."),
+            )
+        except Exception as e:
+            # 오류 발생 시 메인 스레드에서 처리
+            QtCore.QMetaObject.invokeMethod(
+                self,
+                "download_completed",
+                QtCore.Qt.QueuedConnection,
+                QtCore.Q_ARG(bool, False),
+                QtCore.Q_ARG(str, f"다운로드 중 오류가 발생했습니다: {str(e)}"),
+            )
+
+    @QtCore.pyqtSlot(bool, str)
+    def download_completed(self, success, message):
+        """다운로드 완료 후 UI를 업데이트합니다."""
+        # UI 활성화
+        self.setEnabled(True)
+        self.pushButton_download.setText("모델 다운로드")
+
+        # 결과 메시지 표시
+        if success:
+            QMessageBox.information(self, "다운로드 완료", message)
+        else:
+            QMessageBox.warning(self, "다운로드 오류", message)
+
+        # 모델 설치 상태 업데이트
+        self.check_model_installation()
+
+    def check_model_installation(self):
+        """모델 설치 상태를 확인하고 UI를 업데이트합니다."""
+        # 모델 디렉토리가 없으면 생성
+        if not os.path.exists(self.models_dir):
+            os.makedirs(self.models_dir, exist_ok=True)
+        if not os.path.exists(self.ensemble_dir):
+            os.makedirs(self.ensemble_dir, exist_ok=True)
+            
+        # Single Target 모델 (RainVer1TfliteModel) 확인
+        single_model_path = os.path.join(self.models_dir, "model-best.tflite")
+        single_model_installed = os.path.exists(single_model_path)
+
+        # Multi Target 모델 (RainVer2Model) 확인
+        multi_model_installed = os.path.exists(self.ensemble_dir)
+
+        if multi_model_installed:
+            # 모든 앙상블 모델 파일이 있는지 확인
+            multi_model_files = [
+                f"model-best_fcst_{i}min.tflite" for i in range(10, 190, 10)
+            ]
+            multi_model_installed = all(
+                os.path.exists(os.path.join(self.ensemble_dir, f))
+                for f in multi_model_files
+            )
+
+        # 모델 상태 메시지 업데이트
+        status_msg = ""
+        if single_model_installed and multi_model_installed:
+            status_msg = "모델 상태: 모든 모델이 설치되어 있습니다."
+            self.pushButton_download.setEnabled(False)
+        elif single_model_installed:
+            status_msg = "모델 상태: Single Target 모델만 설치되어 있습니다."
+            self.pushButton_download.setEnabled(True)
+        elif multi_model_installed:
+            status_msg = "모델 상태: Multi Target 모델만 설치되어 있습니다."
+            self.pushButton_download.setEnabled(True)
+        else:
+            status_msg = "모델 상태: 모델이 설치되어 있지 않습니다."
+            self.pushButton_download.setEnabled(True)
+
+        self.label_model_status.setText(status_msg)
