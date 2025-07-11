@@ -34,9 +34,7 @@ from kict_rain_forecast.kict_rain_forecast_dialog_base import Ui_Dialog
 
 class KictRainPredictorDialog(QtWidgets.QDialog, Ui_Dialog):
     # 모델 다운로드 URL
-    SINGLE_TARGET_MODEL_URL = (
-        "https://drive.google.com/uc?id=1CxbdCAe8kRBqGQNEXVd-dHkKL8ISi_dq"
-    )
+    SINGLE_TARGET_MODEL_URL = "https://drive.google.com/file/d/1CxbdCAe8kRBqGQNEXVd-dHkKL8ISi_dq/view?usp=drive_link"
     MULTI_TARGET_MODEL_URLS = {
         # 10분 간격으로 10분~180분까지의 모델 URL
         10: "https://drive.google.com/file/d/14Cz1yDCtrbI3KoHlU4GiNXwyCVKS-clX/view?usp=drive_link",
@@ -70,7 +68,7 @@ class KictRainPredictorDialog(QtWidgets.QDialog, Ui_Dialog):
         self.setupUi(self)
 
         # 모델 디렉토리 설정
-        self.plugin_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        self.plugin_dir = os.path.dirname(os.path.abspath(__file__))
         self.models_dir = os.path.join(self.plugin_dir, "models")
         self.ensemble_dir = os.path.join(self.models_dir, "ensemble")
 
@@ -190,7 +188,7 @@ class KictRainPredictorDialog(QtWidgets.QDialog, Ui_Dialog):
             os.makedirs(self.models_dir, exist_ok=True)
         if not os.path.exists(self.ensemble_dir):
             os.makedirs(self.ensemble_dir, exist_ok=True)
-            
+
         # Single Target 모델 (RainVer1TfliteModel) 확인
         single_model_path = os.path.join(self.models_dir, "model-best.tflite")
         single_model_installed = os.path.exists(single_model_path)
