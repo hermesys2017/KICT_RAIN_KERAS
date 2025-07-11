@@ -22,17 +22,12 @@
  ***************************************************************************/
 """
 
-import os
-
-from qgis.PyQt import uic
 from qgis.PyQt import QtWidgets
 
-# This loads your .ui file so that PyQt can populate your plugin with the elements from Qt Designer
-FORM_CLASS, _ = uic.loadUiType(os.path.join(
-    os.path.dirname(__file__), 'kict_rain_forecast_dialog_base.ui'))
+from kict_rain_forecast.kict_rain_forecast_dialog_base import Ui_Dialog
 
 
-class KictRainPredictorDialog(QtWidgets.QDialog, FORM_CLASS):
+class KictRainPredictorDialog(QtWidgets.QDialog, Ui_Dialog):
     def __init__(self, parent=None):
         """Constructor."""
         super(KictRainPredictorDialog, self).__init__(parent)

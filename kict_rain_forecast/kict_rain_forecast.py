@@ -21,15 +21,18 @@
  *                                                                         *
  ***************************************************************************/
 """
-from qgis.PyQt.QtCore import QSettings, QTranslator, QCoreApplication
+
+import os.path
+
+from qgis.PyQt.QtCore import QCoreApplication, QSettings, QTranslator
 from qgis.PyQt.QtGui import QIcon
 from qgis.PyQt.QtWidgets import QAction
 
-# Initialize Qt resources from file resources.py
-from .resources import *
 # Import the code for the dialog
 from .kict_rain_forecast_dialog import KictRainPredictorDialog
-import os.path
+
+# Initialize Qt resources from file resources.py
+from .resources import *
 
 
 class KictRainPredictor:
@@ -48,11 +51,10 @@ class KictRainPredictor:
         # initialize plugin directory
         self.plugin_dir = os.path.dirname(__file__)
         # initialize locale
-        locale = QSettings().value('locale/userLocale')[0:2]
+        locale = QSettings().value("locale/userLocale")[0:2]
         locale_path = os.path.join(
-            self.plugin_dir,
-            'i18n',
-            'KictRainPredictor_{}.qm'.format(locale))
+            self.plugin_dir, "i18n", "KictRainPredictor_{}.qm".format(locale)
+        )
 
         if os.path.exists(locale_path):
             self.translator = QTranslator()
@@ -61,7 +63,7 @@ class KictRainPredictor:
 
         # Declare instance attributes
         self.actions = []
-        self.menu = self.tr(u'&KICT Rain Forecast')
+        self.menu = self.tr("&KICT Rain Forecast")
 
         # Check if plugin was started the first time in current QGIS session
         # Must be set in initGui() to survive plugin reloads
@@ -80,8 +82,7 @@ class KictRainPredictor:
         :rtype: QString
         """
         # noinspection PyTypeChecker,PyArgumentList,PyCallByClass
-        return QCoreApplication.translate('KictRainPredictor', message)
-
+        return QCoreApplication.translate("KictRainPredictor", message)
 
     def add_action(
         self,
@@ -93,7 +94,8 @@ class KictRainPredictor:
         add_to_toolbar=True,
         status_tip=None,
         whats_this=None,
-        parent=None):
+        parent=None,
+    ):
         """Add a toolbar icon to the toolbar.
 
         :param icon_path: Path to the icon for this action. Can be a resource
@@ -149,9 +151,7 @@ class KictRainPredictor:
             self.iface.addToolBarIcon(action)
 
         if add_to_menu:
-            self.iface.addPluginToMenu(
-                self.menu,
-                action)
+            self.iface.addPluginToMenu(self.menu, action)
 
         self.actions.append(action)
 
@@ -160,25 +160,22 @@ class KictRainPredictor:
     def initGui(self):
         """Create the menu entries and toolbar icons inside the QGIS GUI."""
 
-        icon_path = ':/plugins/kict_rain_forecast/icon.png'
+        icon_path = ":/plugins/kict_rain_forecast/icon.png"
         self.add_action(
             icon_path,
-            text=self.tr(u'kict_rain_forecast'),
+            text=self.tr("kict_rain_forecast"),
             callback=self.run,
-            parent=self.iface.mainWindow())
+            parent=self.iface.mainWindow(),
+        )
 
         # will be set False in run()
         self.first_start = True
 
-
     def unload(self):
         """Removes the plugin menu item and icon from QGIS GUI."""
         for action in self.actions:
-            self.iface.removePluginMenu(
-                self.tr(u'&KICT Rain Forecast'),
-                action)
+            self.iface.removePluginMenu(self.tr("&KICT Rain Forecast"), action)
             self.iface.removeToolBarIcon(action)
-
 
     def run(self):
         """Run method that performs all the real work"""
@@ -196,5 +193,7 @@ class KictRainPredictor:
         # See if OK was pressed
         if result:
             # Do something useful here - delete the line containing pass and
+            # substitute with your code.
+            pass
             # substitute with your code.
             pass

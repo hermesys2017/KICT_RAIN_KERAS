@@ -1,3 +1,8 @@
-tensorflow==2.15
+tensorflow
 numpy
 scikit-learn
+gdown
+flake8-qgis
+PyQt5-stubs
+qgis-stubs
+pb_tool
