@@ -27,9 +27,9 @@ import os
 import threading
 
 import gdown
+from qgis.core import QgsProject, QgsRasterLayer
 from qgis.PyQt import QtCore, QtWidgets
 from qgis.PyQt.QtWidgets import QFileDialog, QMessageBox
-from qgis.core import QgsProject, QgsRasterLayer
 
 from kict_rain_forecast.kict_rain_forecast_dialog_base import Ui_Dialog
 
@@ -73,7 +73,7 @@ class KictRainPredictorDialog(QtWidgets.QDialog, Ui_Dialog):
         self.last_used_directory = os.path.expanduser("~")
         # #widgets-and-dialogs-with-auto-connect
         self.setupUi(self)
-        
+
         # Cancel 버튼을 클릭하면 창을 닫도록 연결
         self.pushButton_2.clicked.connect(self.reject)
 
@@ -410,6 +410,17 @@ class KictRainPredictorDialog(QtWidgets.QDialog, Ui_Dialog):
             # 선택된 모델에 따라 적절한 함수 호출
             from kict_rain_forecast.services.predict import ver1_tflite_main, ver2_main
 
+            # 현재 날짜와 시간을 yyyymmddhhmm 형식으로 가져오기
+            from datetime import datetime
+            current_time = datetime.now().strftime("%Y%m%d%H%M")
+            
+            # 날짜/시간을 포함한 출력 폴더 경로 생성
+            output_path_with_time = os.path.join(output_path, current_time)
+            
+            # 폴더가 없으면 생성
+            if not os.path.exists(output_path_with_time):
+                os.makedirs(output_path_with_time)
+                
             # 예측 시작 메시지 표시
             self.label_model_status.setText("예측 중... 잠시만 기다려주세요.")
             QtWidgets.QApplication.processEvents()  # UI 업데이트
@@ -417,23 +428,23 @@ class KictRainPredictorDialog(QtWidgets.QDialog, Ui_Dialog):
             if self.radioButton_2.isChecked():  # Single Target
                 # Ver1 TFLite 모델 사용
                 model_path = os.path.join(self.models_dir, "model-best.tflite")
-                ver1_tflite_main(input_files, model_path, output_path)
+                ver1_tflite_main(input_files, model_path, output_path_with_time)
             else:  # Multi Target
                 # Ver2 모델 사용
                 model_path_dir = self.ensemble_dir
-                ver2_main(input_files, model_path_dir, output_path)
+                ver2_main(input_files, model_path_dir, output_path_with_time)
 
             # 성공 메시지 표시
             QMessageBox.information(
                 self,
                 "예측 완료",
-                f"예측이 완료되었습니다.\n결과는 {output_path} 폴더에 저장되었습니다.",
+                f"예측이 완료되었습니다.\n결과는 {output_path_with_time} 폴더에 저장되었습니다.",
             )
             self.label_model_status.setText("예측 완료")
-            
+
             # 체크박스가 체크되어 있으면 결과를 QGIS 레이어로 추가
             if self.checkBox.isChecked():
-                self.add_results_to_map(output_path)
+                self.add_results_to_map(output_path_with_time)
 
         except Exception as e:
             # 오류 메시지 표시
@@ -441,66 +452,73 @@ class KictRainPredictorDialog(QtWidgets.QDialog, Ui_Dialog):
                 self, "오류 발생", f"예측 중 오류가 발생했습니다:\n{str(e)}"
             )
             self.label_model_status.setText("오류 발생")
-            
+
     def add_results_to_map(self, output_path):
         """예측 결과 파일을 QGIS 레이어로 추가합니다.
-        
+
         Args:
             output_path: 결과 파일이 저장된 폴더 경로
         """
         try:
             # 결과 파일 찾기
             result_files = []
-            
+
             # Single Target 모델의 결과 파일 패턴
             if self.radioButton_2.isChecked():
                 # Single Target 모델은 일반적으로 "output.asc" 형태의 파일을 생성
-                result_pattern = os.path.join(output_path, "*.asc")
-                result_files = glob.glob(result_pattern)
-                
+                for i in range(10, 190, 10):
+                    result_pattern = os.path.join(
+                        output_path, f"QPF_REC_tflite_{i}.asc"
+                    )
+                    files = glob.glob(result_pattern)
+                    result_files.extend(files)
+
             # Multi Target 모델의 결과 파일 패턴
             else:
                 # Multi Target 모델은 시간별 예측 결과 파일을 생성 (10분 간격)
                 for i in range(10, 190, 10):
-                    result_pattern = os.path.join(output_path, f"*{i}min*.asc")
+                    result_pattern = os.path.join(output_path, f"QPF_{i}.asc")
                     files = glob.glob(result_pattern)
                     result_files.extend(files)
-            
+
             if not result_files:
                 QMessageBox.warning(
-                    self, "결과 파일 없음", 
-                    f"{output_path} 폴더에서 결과 파일을 찾을 수 없습니다."
+                    self,
+                    "결과 파일 없음",
+                    f"{output_path} 폴더에서 결과 파일을 찾을 수 없습니다.",
                 )
                 return
-                
+
             # QGIS 프로젝트 가져오기
             project = QgsProject.instance()
-            
+
             # 결과 파일을 레이어로 추가
             added_layers = []
             for file_path in result_files:
                 file_name = os.path.basename(file_path)
                 layer_name = os.path.splitext(file_name)[0]  # 확장자 제거
-                
+
                 # 레스터 레이어 생성
                 layer = QgsRasterLayer(file_path, layer_name)
-                
+
                 if layer.isValid():
                     # 레이어 추가
                     project.addMapLayer(layer)
                     added_layers.append(layer_name)
                 else:
                     print(f"레이어 생성 실패: {file_path}")
-            
+
             # 추가된 레이어 수 표시
             if added_layers:
                 QMessageBox.information(
-                    self, "레이어 추가 완료", 
-                    f"{len(added_layers)}개의 결과 레이어가 맵에 추가되었습니다."
+                    self,
+                    "레이어 추가 완료",
+                    f"{len(added_layers)}개의 결과 레이어가 맵에 추가되었습니다.",
                 )
-            
+
         except Exception as e:
             QMessageBox.warning(
-                self, "레이어 추가 오류", 
-                f"결과를 맵에 추가하는 중 오류가 발생했습니다:\n{str(e)}"
+                self,
+                "레이어 추가 오류",
+                f"결과를 맵에 추가하는 중 오류가 발생했습니다:\n{str(e)}",
             )
