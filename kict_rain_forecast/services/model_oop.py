@@ -1,7 +1,6 @@
 import os
 from abc import ABC, abstractmethod
 
-import keras.backend as K
 import numpy as np
 import tensorflow as tf
 from tensorflow.lite.python.interpreter import Interpreter

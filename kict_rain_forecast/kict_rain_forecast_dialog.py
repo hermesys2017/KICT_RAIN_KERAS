@@ -22,17 +22,45 @@
  ***************************************************************************/
 """
 
+import glob
 import os
+import threading
 
-from qgis.PyQt import uic
-from qgis.PyQt import QtWidgets
+import gdown
+from qgis.core import QgsProject, QgsRasterLayer
+from qgis.PyQt import QtCore, QtWidgets
+from qgis.PyQt.QtWidgets import QFileDialog, QMessageBox
 
-# This loads your .ui file so that PyQt can populate your plugin with the elements from Qt Designer
-FORM_CLASS, _ = uic.loadUiType(os.path.join(
-    os.path.dirname(__file__), 'kict_rain_forecast_dialog_base.ui'))
+from kict_rain_forecast.kict_rain_forecast_dialog_base import Ui_Dialog
 
 
-class KictRainPredictorDialog(QtWidgets.QDialog, FORM_CLASS):
+class KictRainPredictorDialog(QtWidgets.QDialog, Ui_Dialog):
+    # 모델 다운로드 URL
+    SINGLE_TARGET_MODEL_URL = (
+        "https://drive.google.com/uc?id=1CxbdCAe8kRBqGQNEXVd-dHkKL8ISi_dq"
+    )
+    MULTI_TARGET_MODEL_URLS = {
+        # 10분 간격으로 10분~180분까지의 모델 URL
+        10: "https://drive.google.com/uc?id=14Cz1yDCtrbI3KoHlU4GiNXwyCVKS-clX",
+        20: "https://drive.google.com/uc?id=11FNN6ekYG5gpmONQCozPQYc2FH-zLNlM",
+        30: "https://drive.google.com/uc?id=1zsQjoh_nqqEa-9fz91P24xx1FoyDKB_G",
+        40: "https://drive.google.com/uc?id=1FvcROg3Sal2NBAKXG3qRoPsVyIGfph5q",
+        50: "https://drive.google.com/uc?id=1pixZOvE87vFUHLDdei-yvCisBuUJuthM",
+        60: "https://drive.google.com/uc?id=13YWC2efMsKvbNpZ5L_daGkJ0Bpujezqc",
+        70: "https://drive.google.com/uc?id=1MjzRQb1FWz0lKoaAGhiS23TvIjYncGB7",
+        80: "https://drive.google.com/uc?id=1JUrlUDe1EYvoOkQj1jKRerLu5a4F3-as",
+        90: "https://drive.google.com/uc?id=1xzxRDR_YZWz-2oiPEpjTUKQAUHe4-PHj",
+        100: "https://drive.google.com/uc?id=1HlPbS1hlFruMS9uNAjUp20WmHtMoiSwR",
+        110: "https://drive.google.com/uc?id=1DK2YSAKqDOWBhlH9BkfD0oJX2yzhnG7Z",
+        120: "https://drive.google.com/uc?id=1t4KnIHIn3mWChzpJh4v20CB9lhsF84v6",
+        130: "https://drive.google.com/uc?id=14HPeJjzE50ziTQOWs4HhwiK_ftHYIeq3",
+        140: "https://drive.google.com/uc?id=1Ep721RZV3CpFy23se47jG8m9qQiygxAb",
+        150: "https://drive.google.com/uc?id=1pCeW1umNiudMD7yWDHF-hfgb5sXW3YKC",
+        160: "https://drive.google.com/uc?id=1GxzveX6pQeqqoVuvdj2qUeURJOgDTffp",
+        170: "https://drive.google.com/uc?id=1h33EX7ZUlw-OJzgGUHKC6xYQkhJsoUWW",
+        180: "https://drive.google.com/uc?id=1oHvK5CqXKVbbVW5eQtfyzoAp_RPaouZC",
+    }
+
     def __init__(self, parent=None):
         """Constructor."""
         super(KictRainPredictorDialog, self).__init__(parent)
@@ -40,5 +68,457 @@ class KictRainPredictorDialog(QtWidgets.QDialog, FORM_CLASS):
         # After self.setupUi() you can access any designer object by doing
         # self.<objectname>, and you can use autoconnect slots - see
         # http://qt-project.org/doc/qt-4.8/designer-using-a-ui-file.html
+
+        # 최근 사용한 디렉토리 경로 저장 변수
+        self.last_used_directory = os.path.expanduser("~")
         # #widgets-and-dialogs-with-auto-connect
         self.setupUi(self)
+
+        # Cancel 버튼을 클릭하면 창을 닫도록 연결
+        self.pushButton_2.clicked.connect(self.reject)
+
+        # 모델 디렉토리 설정
+        self.plugin_dir = os.path.dirname(os.path.abspath(__file__))
+        self.models_dir = os.path.join(self.plugin_dir, "models")
+        self.ensemble_dir = os.path.join(self.models_dir, "ensemble")
+
+        # 버튼 연결
+        self.pushButton_5.clicked.connect(self.select_output_folder)
+        self.pushButton_download.clicked.connect(self.download_models)
+        self.pushButton.clicked.connect(self.run_prediction)
+
+        # 파일 선택 버튼 연결
+        self.pushButton_file1.clicked.connect(lambda: self.select_input_file(1))
+        self.pushButton_file2.clicked.connect(lambda: self.select_input_file(2))
+        self.pushButton_file3.clicked.connect(lambda: self.select_input_file(3))
+        self.pushButton_file4.clicked.connect(lambda: self.select_input_file(4))
+        self.pushButton_batch.clicked.connect(self.select_batch_files)
+
+        # 모델 설치 상태 확인
+        self.check_model_installation()
+        self.radioButton.toggled.connect(self.check_model_installation)
+        self.radioButton_2.toggled.connect(self.check_model_installation)
+
+        # 초기 모델 설치 상태 확인
+        self.check_model_installation()
+
+    def select_output_folder(self):
+        """출력 폴더 선택 대화상자를 표시합니다."""
+        folder = QFileDialog.getExistingDirectory(
+            self, "출력 폴더 선택", self.last_used_directory
+        )
+        if folder:
+            self.lineEdit_5.setText(folder)
+            self.last_used_directory = folder
+
+    def select_input_file(self, file_num):
+        """입력 파일 선택 대화상자를 표시합니다.
+
+        Args:
+            file_num: 파일 번호 (1-4)
+        """
+        file_filter = "ASC 파일 (*.asc);;모든 파일 (*.*)"
+        file_path, _ = QFileDialog.getOpenFileName(
+            self, f"입력 파일 {file_num} 선택", self.last_used_directory, file_filter
+        )
+        if file_path:
+            # 파일 경로에서 디렉토리 부분 저장
+            self.last_used_directory = os.path.dirname(file_path)
+
+            # 해당 comboBox에 파일 경로 추가
+            if file_num == 1:
+                combo_box = self.comboBox
+            else:
+                combo_box = getattr(self, f"comboBox_{file_num}")
+
+            # 이미 목록에 있는지 확인
+            file_name = os.path.basename(file_path)
+            found = False
+            for i in range(combo_box.count()):
+                if combo_box.itemText(i) == file_name:
+                    combo_box.setCurrentIndex(i)
+                    found = True
+                    break
+
+            # 목록에 없으면 추가
+            if not found:
+                combo_box.addItem(file_name)
+                combo_box.setCurrentText(file_name)
+
+            # 전체 경로를 데이터로 저장
+            combo_box.setItemData(combo_box.currentIndex(), file_path)
+
+    def select_batch_files(self):
+        """일괄 파일 선택 대화상자를 표시합니다."""
+        folder = QFileDialog.getExistingDirectory(
+            self, "레이더 데이터 폴더 선택", self.last_used_directory
+        )
+        if not folder:
+            return
+
+        self.last_used_directory = folder
+
+        # 폴더 내의 모든 .asc 파일 찾기
+        asc_files = sorted(glob.glob(os.path.join(folder, "*.asc")))
+
+        if not asc_files:
+            QMessageBox.warning(
+                self, "파일 없음", f"{folder} 폴더에 ASC 파일이 없습니다."
+            )
+            return
+
+        # 파일이 4개 이상인 경우 선택 대화상자 표시
+        if len(asc_files) >= 4:
+            # 시간순으로 정렬된 파일 목록에서 최근 4개 선택
+            selected_files = asc_files[-4:]
+
+            # 파일 순서 확인 메시지
+            msg = "다음 파일들이 선택되었습니다:\n\n"
+            msg += f"30분 전 데이터: {os.path.basename(selected_files[0])}\n"
+            msg += f"20분 전 데이터: {os.path.basename(selected_files[1])}\n"
+            msg += f"10분 전 데이터: {os.path.basename(selected_files[2])}\n"
+            msg += f"예측 시점 데이터: {os.path.basename(selected_files[3])}\n\n"
+            msg += "파일 순서가 올바른지 확인하세요."
+
+            QMessageBox.information(self, "파일 선택 완료", msg)
+
+            # 각 comboBox에 파일 설정
+            combo_boxes = [
+                self.comboBox,
+                self.comboBox_2,
+                self.comboBox_3,
+                self.comboBox_4,
+            ]
+            for i, file_path in enumerate(selected_files):
+                file_name = os.path.basename(file_path)
+
+                # 이미 목록에 있는지 확인
+                combo_box = combo_boxes[i]
+                found = False
+                for j in range(combo_box.count()):
+                    if combo_box.itemText(j) == file_name:
+                        combo_box.setCurrentIndex(j)
+                        combo_box.setItemData(j, file_path)
+                        found = True
+                        break
+
+                # 목록에 없으면 추가
+                if not found:
+                    combo_box.addItem(file_name)
+                    combo_box.setCurrentText(file_name)
+                    combo_box.setItemData(combo_box.currentIndex(), file_path)
+        else:
+            QMessageBox.warning(
+                self,
+                "파일 부족",
+                f"{folder} 폴더에 ASC 파일이 4개 미만입니다.\n"
+                "4개 이상의 파일이 필요합니다.",
+            )
+        if folder:
+            self.lineEdit_5.setText(folder)
+
+    def download_models(self):
+        """선택된 모델 유형에 따라 모델을 다운로드합니다."""
+        # 모델 디렉토리가 없으면 생성
+        if not os.path.exists(self.models_dir):
+            os.makedirs(self.models_dir, exist_ok=True)
+
+        # 앙상블 모델 디렉토리가 없으면 생성
+        if not os.path.exists(self.ensemble_dir):
+            os.makedirs(self.ensemble_dir, exist_ok=True)
+
+        # 다운로드 중 UI 비활성화
+        self.setEnabled(False)
+        self.pushButton_download.setText("다운로드 중...")
+
+        # 선택된 모델 유형에 따라 다운로드 시작
+        if self.radioButton.isChecked():  # Multi Target
+            threading.Thread(target=self.download_multi_target_models).start()
+        else:  # Single Target
+            threading.Thread(target=self.download_single_target_model).start()
+
+    def download_single_target_model(self):
+        """Single Target 모델을 다운로드합니다."""
+        try:
+            output_path = os.path.join(self.models_dir, "model-best.tflite")
+            gdown.download(self.SINGLE_TARGET_MODEL_URL, output_path, quiet=False)
+
+            # UI 업데이트는 메인 스레드에서 수행
+            QtCore.QMetaObject.invokeMethod(
+                self,
+                "download_completed",
+                QtCore.Qt.QueuedConnection,
+                QtCore.Q_ARG(bool, True),
+                QtCore.Q_ARG(str, "Single Target 모델 다운로드가 완료되었습니다."),
+            )
+        except Exception as e:
+            # 오류 발생 시 메인 스레드에서 처리
+            QtCore.QMetaObject.invokeMethod(
+                self,
+                "download_completed",
+                QtCore.Qt.QueuedConnection,
+                QtCore.Q_ARG(bool, False),
+                QtCore.Q_ARG(str, f"다운로드 중 오류가 발생했습니다: {str(e)}"),
+            )
+
+    def download_multi_target_models(self):
+        """Multi Target 모델(앙상블 모델)을 다운로드합니다."""
+        try:
+            # 18개 모델 다운로드
+            for minutes, url in self.MULTI_TARGET_MODEL_URLS.items():
+                output_path = os.path.join(
+                    self.ensemble_dir, f"model-best_fcst_{minutes}min.tflite"
+                )
+                gdown.download(url, output_path, quiet=False)
+
+            # UI 업데이트는 메인 스레드에서 수행
+            QtCore.QMetaObject.invokeMethod(
+                self,
+                "download_completed",
+                QtCore.Qt.QueuedConnection,
+                QtCore.Q_ARG(bool, True),
+                QtCore.Q_ARG(str, "Multi Target 모델 다운로드가 완료되었습니다."),
+            )
+        except Exception as e:
+            # 오류 발생 시 메인 스레드에서 처리
+            QtCore.QMetaObject.invokeMethod(
+                self,
+                "download_completed",
+                QtCore.Qt.QueuedConnection,
+                QtCore.Q_ARG(bool, False),
+                QtCore.Q_ARG(str, f"다운로드 중 오류가 발생했습니다: {str(e)}"),
+            )
+
+    @QtCore.pyqtSlot(bool, str)
+    def download_completed(self, success, message):
+        """다운로드 완료 후 UI를 업데이트합니다."""
+        # UI 활성화
+        self.setEnabled(True)
+        self.pushButton_download.setText("모델 다운로드")
+
+        # 결과 메시지 표시
+        if success:
+            QMessageBox.information(self, "다운로드 완료", message)
+        else:
+            QMessageBox.warning(self, "다운로드 오류", message)
+
+        # 모델 설치 상태 업데이트
+        self.check_model_installation()
+
+    def get_full_file_path(self, combo_box):
+        """콤보박스에서 선택된 파일의 전체 경로를 반환합니다.
+
+        Args:
+            combo_box: 콤보박스 객체
+
+        Returns:
+            str: 파일의 전체 경로 또는 None
+        """
+        if combo_box.currentIndex() >= 0:
+            # 데이터로 저장된 전체 경로가 있는지 확인
+            file_path = combo_box.itemData(combo_box.currentIndex())
+            if file_path:
+                return file_path
+
+            # 데이터가 없으면 파일명만 있는 것으로 간주
+            file_name = combo_box.currentText()
+            if file_name:
+                # 마지막 사용 디렉토리에서 파일 찾기 시도
+                possible_path = os.path.join(self.last_used_directory, file_name)
+                if os.path.exists(possible_path):
+                    return possible_path
+        return None
+
+    def check_model_installation(self):
+        """모델 설치 상태를 확인하고 UI를 업데이트합니다."""
+        # 모델 디렉토리가 없으면 생성
+        if not os.path.exists(self.models_dir):
+            os.makedirs(self.models_dir)
+        if not os.path.exists(self.ensemble_dir):
+            os.makedirs(self.ensemble_dir)
+
+        # Single Target 모델 (RainVer1TfliteModel) 확인
+        single_model_path = os.path.join(self.models_dir, "model-best.tflite")
+        ver1_installed = os.path.exists(single_model_path)
+
+        # Multi Target 모델 (RainVer2Model) 확인
+        ver2_installed = os.path.exists(self.ensemble_dir)
+
+        if ver2_installed:
+            # 모든 앙상블 모델 파일이 있는지 확인
+            multi_model_files = [
+                f"model-best_fcst_{i}min.tflite" for i in range(10, 190, 10)
+            ]
+            ver2_installed = all(
+                os.path.exists(os.path.join(self.ensemble_dir, f))
+                for f in multi_model_files
+            )
+
+        # 선택된 모델에 따라 Predict 버튼 활성화/비활성화
+        if self.radioButton_2.isChecked():  # Single Target
+            self.pushButton.setEnabled(ver1_installed)
+        else:  # Multi Target
+            self.pushButton.setEnabled(ver2_installed)
+
+        # 모델 상태 메시지 업데이트
+        if ver1_installed and ver2_installed:
+            status_msg = "모델 상태: 모든 모델이 설치되어 있습니다."
+            self.pushButton_download.setEnabled(False)
+        elif ver1_installed:
+            status_msg = "모델 상태: Single Target 모델만 설치되어 있습니다."
+            self.pushButton_download.setEnabled(True)
+        elif ver2_installed:
+            status_msg = "모델 상태: Multi Target 모델만 설치되어 있습니다."
+            self.pushButton_download.setEnabled(True)
+        else:
+            status_msg = "모델 상태: 모델이 설치되어 있지 않습니다."
+            self.pushButton_download.setEnabled(True)
+
+        self.label_model_status.setText(status_msg)
+
+        return ver1_installed, ver2_installed
+
+    def run_prediction(self):
+        """예측 버튼 클릭 시 실행되는 함수입니다."""
+        # 입력 파일 경로 가져오기
+        input_files = [
+            self.get_full_file_path(self.comboBox),
+            self.get_full_file_path(self.comboBox_2),
+            self.get_full_file_path(self.comboBox_3),
+            self.get_full_file_path(self.comboBox_4),
+        ]
+
+        # 출력 폴더 경로 가져오기
+        output_path = self.lineEdit_5.text()
+
+        # 파일 경로 및 출력 폴더 유효성 검사
+        if not all(input_files) or not output_path:
+            QMessageBox.warning(
+                self, "입력 오류", "모든 입력 파일과 출력 폴더를 지정해야 합니다."
+            )
+            return
+
+        if not os.path.exists(output_path):
+            QMessageBox.warning(
+                self, "경로 오류", f"출력 폴더 {output_path}가 존재하지 않습니다."
+            )
+            return
+
+        # 모델 디렉토리 경로 설정
+
+        try:
+            # 선택된 모델에 따라 적절한 함수 호출
+            from kict_rain_forecast.services.predict import ver1_tflite_main, ver2_main
+
+            # 현재 날짜와 시간을 yyyymmddhhmm 형식으로 가져오기
+            from datetime import datetime
+            current_time = datetime.now().strftime("%Y%m%d%H%M")
+            
+            # 날짜/시간을 포함한 출력 폴더 경로 생성
+            output_path_with_time = os.path.join(output_path, current_time)
+            
+            # 폴더가 없으면 생성
+            if not os.path.exists(output_path_with_time):
+                os.makedirs(output_path_with_time)
+                
+            # 예측 시작 메시지 표시
+            self.label_model_status.setText("예측 중... 잠시만 기다려주세요.")
+            QtWidgets.QApplication.processEvents()  # UI 업데이트
+
+            if self.radioButton_2.isChecked():  # Single Target
+                # Ver1 TFLite 모델 사용
+                model_path = os.path.join(self.models_dir, "model-best.tflite")
+                ver1_tflite_main(input_files, model_path, output_path_with_time)
+            else:  # Multi Target
+                # Ver2 모델 사용
+                model_path_dir = self.ensemble_dir
+                ver2_main(input_files, model_path_dir, output_path_with_time)
+
+            # 성공 메시지 표시
+            QMessageBox.information(
+                self,
+                "예측 완료",
+                f"예측이 완료되었습니다.\n결과는 {output_path_with_time} 폴더에 저장되었습니다.",
+            )
+            self.label_model_status.setText("예측 완료")
+
+            # 체크박스가 체크되어 있으면 결과를 QGIS 레이어로 추가
+            if self.checkBox.isChecked():
+                self.add_results_to_map(output_path_with_time)
+
+        except Exception as e:
+            # 오류 메시지 표시
+            QMessageBox.critical(
+                self, "오류 발생", f"예측 중 오류가 발생했습니다:\n{str(e)}"
+            )
+            self.label_model_status.setText("오류 발생")
+
+    def add_results_to_map(self, output_path):
+        """예측 결과 파일을 QGIS 레이어로 추가합니다.
+
+        Args:
+            output_path: 결과 파일이 저장된 폴더 경로
+        """
+        try:
+            # 결과 파일 찾기
+            result_files = []
+
+            # Single Target 모델의 결과 파일 패턴
+            if self.radioButton_2.isChecked():
+                # Single Target 모델은 일반적으로 "output.asc" 형태의 파일을 생성
+                for i in range(10, 190, 10):
+                    result_pattern = os.path.join(
+                        output_path, f"QPF_REC_tflite_{i}.asc"
+                    )
+                    files = glob.glob(result_pattern)
+                    result_files.extend(files)
+
+            # Multi Target 모델의 결과 파일 패턴
+            else:
+                # Multi Target 모델은 시간별 예측 결과 파일을 생성 (10분 간격)
+                for i in range(10, 190, 10):
+                    result_pattern = os.path.join(output_path, f"QPF_{i}.asc")
+                    files = glob.glob(result_pattern)
+                    result_files.extend(files)
+
+            if not result_files:
+                QMessageBox.warning(
+                    self,
+                    "결과 파일 없음",
+                    f"{output_path} 폴더에서 결과 파일을 찾을 수 없습니다.",
+                )
+                return
+
+            # QGIS 프로젝트 가져오기
+            project = QgsProject.instance()
+
+            # 결과 파일을 레이어로 추가
+            added_layers = []
+            for file_path in result_files:
+                file_name = os.path.basename(file_path)
+                layer_name = os.path.splitext(file_name)[0]  # 확장자 제거
+
+                # 레스터 레이어 생성
+                layer = QgsRasterLayer(file_path, layer_name)
+
+                if layer.isValid():
+                    # 레이어 추가
+                    project.addMapLayer(layer)
+                    added_layers.append(layer_name)
+                else:
+                    print(f"레이어 생성 실패: {file_path}")
+
+            # 추가된 레이어 수 표시
+            if added_layers:
+                QMessageBox.information(
+                    self,
+                    "레이어 추가 완료",
+                    f"{len(added_layers)}개의 결과 레이어가 맵에 추가되었습니다.",
+                )
+
+        except Exception as e:
+            QMessageBox.warning(
+                self,
+                "레이어 추가 오류",
+                f"결과를 맵에 추가하는 중 오류가 발생했습니다:\n{str(e)}",
+            )
