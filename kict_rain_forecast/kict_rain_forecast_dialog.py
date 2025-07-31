@@ -25,13 +25,35 @@
 import glob
 import os
 import threading
+import time
 
 import gdown
 from qgis.core import QgsProject, QgsRasterLayer
 from qgis.PyQt import QtCore, QtWidgets
-from qgis.PyQt.QtWidgets import QFileDialog, QMessageBox
+from qgis.PyQt.QtWidgets import QFileDialog, QMessageBox, QProgressDialog, QApplication
+from qgis.PyQt.QtCore import pyqtSignal, pyqtSlot, QObject
 
 from kict_rain_forecast.kict_rain_forecast_dialog_base import Ui_Dialog
+
+
+# 다운로드 관리자 클래스 - 스레드 간 통신을 위한 시그널 정의
+class DownloadManager(QObject):
+    # 시그널 정의
+    create_progress_dialog_signal = pyqtSignal(str, int)
+    update_progress_signal = pyqtSignal(int, str)
+    update_dialog_title_signal = pyqtSignal(str)
+    download_completed_signal = pyqtSignal(bool, str)
+    download_error_signal = pyqtSignal(str)
+    
+    def __init__(self, parent=None):
+        super(DownloadManager, self).__init__(parent)
+        self.parent = parent
+        self.canceled = False
+        # 파일 다운로드 현황 관리를 위한 변수
+        self.file_size = 0
+        self.downloaded = 0
+        self.start_time = 0
+        self.progress_active = False
 
 
 class KictRainPredictorDialog(QtWidgets.QDialog, Ui_Dialog):
@@ -81,6 +103,17 @@ class KictRainPredictorDialog(QtWidgets.QDialog, Ui_Dialog):
         self.plugin_dir = os.path.dirname(os.path.abspath(__file__))
         self.models_dir = os.path.join(self.plugin_dir, "models")
         self.ensemble_dir = os.path.join(self.models_dir, "ensemble")
+
+        # 다운로드 관리자 생성
+        self.download_manager = DownloadManager(self)
+        self.download_manager.create_progress_dialog_signal.connect(self.create_progress_dialog)
+        self.download_manager.update_progress_signal.connect(self.update_progress_dialog)
+        self.download_manager.update_dialog_title_signal.connect(self.update_progress_dialog_title)
+        self.download_manager.download_completed_signal.connect(self.download_completed)
+        self.download_manager.download_error_signal.connect(self.download_error)
+        
+        # 진행 상황 대화 상자 및 다운로드 취소 플래그
+        self.progress_dialog = None
 
         # 버튼 연결
         self.pushButton_5.clicked.connect(self.select_output_folder)
@@ -237,61 +270,304 @@ class KictRainPredictorDialog(QtWidgets.QDialog, Ui_Dialog):
         else:  # Single Target
             threading.Thread(target=self.download_single_target_model).start()
 
+    def download_with_progress(self, url, output_path, model_name, total_models=1, current_model=1):
+        """진행 상황 표시와 함께 모델을 다운로드합니다.
+        
+        Args:
+            url: 다운로드할 URL
+            output_path: 저장할 경로
+            model_name: 모델 이름 (진행 상황 창에 표시)
+            total_models: 전체 모델 수
+            current_model: 현재 다운로드 중인 모델 번호
+        """
+        # 진행 상황 모니터링을 위한 변수
+        self.download_manager.file_size = 0
+        self.download_manager.downloaded = 0
+        self.download_manager.start_time = time.time()
+        self.download_manager.progress_active = True
+        
+        # 파일 크기를 추정하기 위한 함수
+        def estimate_file_size():
+            try:
+                # URL에서 리다이렉트를 확인하여 실제 파일 URL 찾기
+                import requests
+                from urllib.parse import urlparse, parse_qs
+                
+                # Google Drive 파일 ID 추출
+                parsed = urlparse(url)
+                if "drive.google.com" in parsed.netloc:
+                    file_id = parse_qs(parsed.query).get('id', [''])[0]
+                    if not file_id and 'id=' in url:
+                        # URL에서 id 직접 추출 시도
+                        file_id = url.split('id=')[1].split('&')[0]
+                    
+                    if file_id:
+                        # 리다이렉트 URL 찾기
+                        session = requests.Session()
+                        response = session.get(f"https://drive.google.com/uc?id={file_id}&export=download", stream=True)
+                        if response.status_code == 200:
+                            try:
+                                content_length = int(response.headers.get('content-length', 0))
+                                if content_length > 0:
+                                    self.download_manager.file_size = content_length
+                                    return content_length
+                            except:
+                                pass
+            except Exception as e:
+                print(f"파일 크기 추정 오류: {str(e)}")
+            
+            # 추정 실패 시 기본값
+            default_size = 1024 * 1024 * 100  # 대략 100MB로 추정
+            self.download_manager.file_size = default_size
+            return default_size
+        
+        # 진행률 모니터링 스레드
+        def progress_monitor():
+            # 파일 크기 추정
+            estimated_size = estimate_file_size()
+            self.download_manager.file_size = estimated_size
+            
+            # 임시 파일 크기 저장 변수 (파일 크기가 증가하지 않을 때 다운로드 완료 감지용)
+            last_size = 0
+            unchanged_count = 0
+            progress_values = [0] * 5  # 최근 진행률 값을 저장하는 배열 (안정화용)
+            progress_index = 0
+            
+            # 초기 진행률 업데이트 - 간단하게 표시
+            initial_msg = f"모델 {current_model}/{total_models}"
+            self.download_manager.update_progress_signal.emit(0, initial_msg)
+            
+            while self.download_manager.progress_active:
+                # 취소 확인
+                if self.download_manager.canceled:
+                    break
+                    
+                try:
+                    # 이미 다운로드된 파일 크기 확인
+                    current_size = 0
+                    if os.path.exists(output_path):
+                        current_size = os.path.getsize(output_path)
+                        self.download_manager.downloaded = current_size
+                    
+                    # 파일 크기가 변하지 않으면 카운트 증가 (완료 감지용)
+                    if current_size == last_size and current_size > 0:
+                        unchanged_count += 1
+                    else:
+                        unchanged_count = 0
+                        last_size = current_size
+                    
+                    # 진행률 계산
+                    downloaded_bytes = self.download_manager.downloaded
+                    total_bytes = self.download_manager.file_size
+                    
+                    if total_bytes > 0:
+                        # 진행률 계산 (최대 99%까지만)
+                        raw_progress = min(99, int(downloaded_bytes * 100 / total_bytes))
+                        
+                        # 진행률 안정화 (최근 5개 값의 평균)
+                        progress_values[progress_index] = raw_progress
+                        progress_index = (progress_index + 1) % len(progress_values)
+                        progress = sum(progress_values) // len(progress_values)
+                        
+                        # 다운로드 완료로 판단되면 100%로 설정
+                        if unchanged_count >= 6 and downloaded_bytes > 0:  # 3초간 크기 변화 없음
+                            progress = 100
+                        
+                        # 다운로드 속도 계산
+                        elapsed = time.time() - self.download_manager.start_time
+                        if elapsed > 0:
+                            speed = downloaded_bytes / elapsed / 1024  # KB/s
+                            
+                            # 남은 시간 추정
+                            if downloaded_bytes > 0 and downloaded_bytes < total_bytes:
+                                eta = (total_bytes - downloaded_bytes) * elapsed / downloaded_bytes
+                                eta_str = f"{int(eta/60):02d}:{int(eta%60):02d}"
+                            else:
+                                eta_str = "--:--"
+                                
+                            # 진행 상황 업데이트 - 간단하게 모델 번호만 표시
+                            msg = f"모델 {current_model}/{total_models}"
+                            
+                            # 시그널을 통해 진행 상황 업데이트
+                            self.download_manager.update_progress_signal.emit(progress, msg)
+                except Exception as e:
+                    pass  # 모니터링 오류 무시
+                    
+                # 잠시 대기
+                time.sleep(0.5)
+        
+        # 모니터링 스레드 시작
+        monitor_thread = threading.Thread(target=progress_monitor)
+        monitor_thread.daemon = True
+        monitor_thread.start()
+                    
+        try:
+            # 기본 다운로드 시작 - callback 인자 없이 사용
+            gdown.download(url, output_path, quiet=False)
+            
+            # 모니터링 중지
+            self.download_manager.progress_active = False
+            
+            # 모니터링 스레드 종료 대기
+            monitor_thread.join(1.0)  # 1초까지만 기다림
+            return True
+        except Exception as e:
+            # 모니터링 중지
+            self.download_manager.progress_active = False
+            
+            # 오류 발생 시 시그널 발생
+            self.download_manager.download_error_signal.emit(f"다운로드 중 오류가 발생했습니다: {str(e)}")
+            return False
+            
     def download_single_target_model(self):
         """Single Target 모델을 다운로드합니다."""
+        # 다운로드 취소 플래그 초기화
+        self.download_manager.canceled = False
+        
+        # 시그널을 통해 진행 상황 대화 상자 생성 요청
+        self.download_manager.create_progress_dialog_signal.emit("Single Target 모델 다운로드 중", 1)
+        
         try:
             output_path = os.path.join(self.models_dir, "model-best.tflite")
-            gdown.download(self.SINGLE_TARGET_MODEL_URL, output_path, quiet=False)
+            success = self.download_with_progress(
+                self.SINGLE_TARGET_MODEL_URL, 
+                output_path, 
+                "Single Target 모델"
+            )
 
-            # UI 업데이트는 메인 스레드에서 수행
-            QtCore.QMetaObject.invokeMethod(
-                self,
-                "download_completed",
-                QtCore.Qt.QueuedConnection,
-                QtCore.Q_ARG(bool, True),
-                QtCore.Q_ARG(str, "Single Target 모델 다운로드가 완료되었습니다."),
+            # 시그널을 통해 완료 알림
+            self.download_manager.download_completed_signal.emit(
+                success, 
+                "Single Target 모델 다운로드가 완료되었습니다." if success else "다운로드가 취소되었습니다."
             )
         except Exception as e:
-            # 오류 발생 시 메인 스레드에서 처리
-            QtCore.QMetaObject.invokeMethod(
-                self,
-                "download_completed",
-                QtCore.Qt.QueuedConnection,
-                QtCore.Q_ARG(bool, False),
-                QtCore.Q_ARG(str, f"다운로드 중 오류가 발생했습니다: {str(e)}"),
+            # 오류 발생 시 시그널 발생
+            self.download_manager.download_completed_signal.emit(
+                False, 
+                f"다운로드 중 오류가 발생했습니다: {str(e)}"
             )
 
     def download_multi_target_models(self):
         """Multi Target 모델(앙상블 모델)을 다운로드합니다."""
+        # 총 모델 수
+        total_models = len(self.MULTI_TARGET_MODEL_URLS)
+        
+        # 다운로드 취소 플래그 초기화
+        self.download_manager.canceled = False
+        
+        # 시그널을 통해 진행 상황 대화 상자 생성 요청
+        self.download_manager.create_progress_dialog_signal.emit("Multi Target 모델 다운로드 중", total_models)
+        
         try:
             # 18개 모델 다운로드
-            for minutes, url in self.MULTI_TARGET_MODEL_URLS.items():
+            success = True
+            for i, (minutes, url) in enumerate(self.MULTI_TARGET_MODEL_URLS.items(), 1):
+                # 취소 확인
+                if self.download_manager.canceled:
+                    success = False
+                    break
+                    
                 output_path = os.path.join(
                     self.ensemble_dir, f"model-best_fcst_{minutes}min.tflite"
                 )
-                gdown.download(url, output_path, quiet=False)
+                model_name = f"Multi Target {minutes}min 모델"
+                
+                # 시그널을 통해 현재 다운로드 중인 모델 정보 업데이트
+                self.download_manager.update_dialog_title_signal.emit(
+                    f"Multi Target 모델 다운로드 중 ({i}/{total_models}): {minutes}min"
+                )
+                
+                # 모델 다운로드
+                if not self.download_with_progress(url, output_path, model_name, total_models, i):
+                    success = False
+                    break
 
-            # UI 업데이트는 메인 스레드에서 수행
-            QtCore.QMetaObject.invokeMethod(
-                self,
-                "download_completed",
-                QtCore.Qt.QueuedConnection,
-                QtCore.Q_ARG(bool, True),
-                QtCore.Q_ARG(str, "Multi Target 모델 다운로드가 완료되었습니다."),
+            # 시그널을 통해 완료 알림
+            self.download_manager.download_completed_signal.emit(
+                success, 
+                "Multi Target 모델 다운로드가 완료되었습니다." if success else "다운로드가 취소되었습니다."
             )
         except Exception as e:
-            # 오류 발생 시 메인 스레드에서 처리
-            QtCore.QMetaObject.invokeMethod(
-                self,
-                "download_completed",
-                QtCore.Qt.QueuedConnection,
-                QtCore.Q_ARG(bool, False),
-                QtCore.Q_ARG(str, f"다운로드 중 오류가 발생했습니다: {str(e)}"),
+            # 오류 발생 시 시그널 발생
+            self.download_manager.download_completed_signal.emit(
+                False, 
+                f"다운로드 중 오류가 발생했습니다: {str(e)}"
             )
+
+    @QtCore.pyqtSlot(str)
+    def create_progress_dialog(self, title, total_models=1):
+        """다운로드 진행 상황을 표시할 대화 상자를 생성합니다."""
+        # 진행 상황 대화 상자 생성
+        self.progress_dialog = QProgressDialog(self)
+        self.progress_dialog.setWindowTitle(title)
+        self.progress_dialog.setLabelText(f"모델 1/{total_models}")
+        
+        # 진행 바 숨기기
+        self.progress_dialog.setRange(0, 0)  # 무한 진행 모드로 설정(현행 마크)
+        self.progress_dialog.setCancelButtonText("취소")
+        self.progress_dialog.setMinimumDuration(0)  # 즉시 표시
+        self.progress_dialog.setMinimumWidth(200)  # 너비 설정
+        self.progress_dialog.setAutoClose(False)  # 자동 종료 방지
+        self.progress_dialog.setAutoReset(False)  # 자동 리셋 방지
+        
+        # 모달이 아닌 모드로 설정 (UI가 계속 반응하도록)
+        self.progress_dialog.setModal(False)
+        
+        # 취소 버튼 연결
+        self.progress_dialog.canceled.connect(self.cancel_download)
+        
+        # 총 모델 수 저장
+        self.total_models = total_models
+        self.current_model = 1
+        
+        # 창을 표시
+        self.progress_dialog.show()
+        QApplication.processEvents()
+    
+    @QtCore.pyqtSlot(str)
+    def update_progress_dialog_title(self, title):
+        """진행 상황 대화 상자의 제목을 업데이트합니다."""
+        if hasattr(self, 'progress_dialog') and self.progress_dialog:
+            self.progress_dialog.setWindowTitle(title)
+            QApplication.processEvents()
+    
+    @QtCore.pyqtSlot(int, str)
+    def update_progress_dialog(self, progress, message):
+        """진행 상황 대화 상자를 업데이트합니다."""
+        if hasattr(self, 'progress_dialog') and self.progress_dialog:
+            # 진행률을 무시하고 메시지만 업데이트
+            # 단순히 "모델 n/total" 형태로 표시
+            # message를 파싱하여 모델 번호만 추출
+            try:
+                model_info = message.split(':')[0].strip()
+                self.progress_dialog.setLabelText(model_info)
+            except:
+                self.progress_dialog.setLabelText(message)
+            
+            # UI 갱신을 위한 이벤트 처리 강제 실행
+            QApplication.processEvents()
+    
+    @QtCore.pyqtSlot()
+    def cancel_download(self):
+        """다운로드 취소 처리를 수행합니다."""
+        # 취소 신호 설정 (gdown은 직접적인 취소 방법이 없으므로 이후 작업을 중단하는 용도)
+        self.download_manager.canceled = True
+        
+    @QtCore.pyqtSlot(str)
+    def download_error(self, error_message):
+        """다운로드 오류 처리를 수행합니다."""
+        if hasattr(self, 'progress_dialog') and self.progress_dialog:
+            self.progress_dialog.close()
+            QMessageBox.warning(self, "다운로드 오류", error_message)
 
     @QtCore.pyqtSlot(bool, str)
     def download_completed(self, success, message):
         """다운로드 완료 후 UI를 업데이트합니다."""
+        # 진행 상황 대화 상자 닫기
+        if hasattr(self, 'progress_dialog') and self.progress_dialog:
+            self.progress_dialog.close()
+            self.progress_dialog = None
+            
         # UI 활성화
         self.setEnabled(True)
         self.pushButton_download.setText("모델 다운로드")
@@ -300,7 +576,7 @@ class KictRainPredictorDialog(QtWidgets.QDialog, Ui_Dialog):
         if success:
             QMessageBox.information(self, "다운로드 완료", message)
         else:
-            QMessageBox.warning(self, "다운로드 오류", message)
+            QMessageBox.warning(self, "다운로드 상태", message)
 
         # 모델 설치 상태 업데이트
         self.check_model_installation()
