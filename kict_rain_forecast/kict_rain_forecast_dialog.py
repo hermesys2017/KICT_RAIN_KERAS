@@ -28,10 +28,20 @@ import threading
 import time
 
 import gdown
+from PyQt5 import QtCore, QtWidgets
 from qgis.core import QgsProject, QgsRasterLayer
-from qgis.PyQt import QtCore, QtWidgets
-from qgis.PyQt.QtWidgets import QFileDialog, QMessageBox, QProgressDialog, QApplication
-from qgis.PyQt.QtCore import pyqtSignal, pyqtSlot, QObject
+from qgis.PyQt.QtCore import QObject, pyqtSignal
+from qgis.PyQt.QtWidgets import (
+    QApplication,
+    QDialog,
+    QFileDialog,
+    QLabel,
+    QMessageBox,
+    QProgressBar,
+    QProgressDialog,
+    QPushButton,
+    QVBoxLayout,
+)
 
 from kict_rain_forecast.kict_rain_forecast_dialog_base import Ui_Dialog
 
@@ -44,7 +54,7 @@ class DownloadManager(QObject):
     update_dialog_title_signal = pyqtSignal(str)
     download_completed_signal = pyqtSignal(bool, str)
     download_error_signal = pyqtSignal(str)
-    
+
     def __init__(self, parent=None):
         super(DownloadManager, self).__init__(parent)
         self.parent = parent
@@ -106,12 +116,18 @@ class KictRainPredictorDialog(QtWidgets.QDialog, Ui_Dialog):
 
         # 다운로드 관리자 생성
         self.download_manager = DownloadManager(self)
-        self.download_manager.create_progress_dialog_signal.connect(self.create_progress_dialog)
-        self.download_manager.update_progress_signal.connect(self.update_progress_dialog)
-        self.download_manager.update_dialog_title_signal.connect(self.update_progress_dialog_title)
+        self.download_manager.create_progress_dialog_signal.connect(
+            self.create_progress_dialog
+        )
+        self.download_manager.update_progress_signal.connect(
+            self.update_progress_dialog
+        )
+        self.download_manager.update_dialog_title_signal.connect(
+            self.update_progress_dialog_title
+        )
         self.download_manager.download_completed_signal.connect(self.download_completed)
         self.download_manager.download_error_signal.connect(self.download_error)
-        
+
         # 진행 상황 대화 상자 및 다운로드 취소 플래그
         self.progress_dialog = None
 
@@ -270,9 +286,92 @@ class KictRainPredictorDialog(QtWidgets.QDialog, Ui_Dialog):
         else:  # Single Target
             threading.Thread(target=self.download_single_target_model).start()
 
-    def download_with_progress(self, url, output_path, model_name, total_models=1, current_model=1):
+    def download_single_target_model(self):
+        """단일 모델(Single Target)을 다운로드합니다."""
+        # 다운로드 취소 플래그 초기화
+        self.download_manager.canceled = False
+
+        # 시그널을 통해 진행 상황 대화 상자 생성 요청
+        self.download_manager.create_progress_dialog_signal.emit(
+            "Single Target 모델 다운로드 중", 1
+        )
+
+        try:
+            output_path = os.path.join(self.models_dir, "model-best.tflite")
+            success = self.download_with_progress(
+                self.SINGLE_TARGET_MODEL_URL, output_path, "Single Target 모델"
+            )
+
+            # 시그널을 통해 완료 알림
+            self.download_manager.download_completed_signal.emit(
+                success,
+                "Single Target 모델 다운로드가 완료되었습니다."
+                if success
+                else "다운로드가 취소되었습니다.",
+            )
+        except Exception as e:
+            # 오류 발생 시 시그널 발생
+            self.download_manager.download_completed_signal.emit(
+                False, f"다운로드 중 오류가 발생했습니다: {str(e)}"
+            )
+
+    def download_multi_target_models(self):
+        """다중 모델(Multi Target)을 다운로드합니다."""
+        # 총 모델 수
+        total_models = len(self.MULTI_TARGET_MODEL_URLS)
+
+        # 다운로드 취소 플래그 초기화
+        self.download_manager.canceled = False
+
+        # 시그널을 통해 진행 상황 대화 상자 생성 요청
+        self.download_manager.create_progress_dialog_signal.emit(
+            "Multi Target 모델 다운로드 중", total_models
+        )
+
+        try:
+            # 18개 모델 다운로드
+            success = True
+            for i, (minutes, url) in enumerate(self.MULTI_TARGET_MODEL_URLS.items(), 1):
+                # 취소 확인
+                if self.download_manager.canceled:
+                    success = False
+                    break
+
+                output_path = os.path.join(
+                    self.ensemble_dir, f"model-best_fcst_{minutes}min.tflite"
+                )
+                model_name = f"Multi Target {minutes}min 모델"
+
+                # 시그널을 통해 현재 다운로드 중인 모델 정보 업데이트
+                self.download_manager.update_dialog_title_signal.emit(
+                    f"Multi Target 모델 다운로드 중 ({i}/{total_models}): {minutes}min"
+                )
+
+                # 모델 다운로드
+                if not self.download_with_progress(
+                    url, output_path, model_name, total_models, i
+                ):
+                    success = False
+                    break
+
+            # 시그널을 통해 완료 알림
+            self.download_manager.download_completed_signal.emit(
+                success,
+                "Multi Target 모델 다운로드가 완료되었습니다."
+                if success
+                else "다운로드가 취소되었습니다.",
+            )
+        except Exception as e:
+            # 오류 발생 시 시그널 발생
+            self.download_manager.download_completed_signal.emit(
+                False, f"다운로드 중 오류가 발생했습니다: {str(e)}"
+            )
+
+    def download_with_progress(
+        self, url, output_path, model_name, total_models=1, current_model=1
+    ):
         """진행 상황 표시와 함께 모델을 다운로드합니다.
-        
+
         Args:
             url: 다운로드할 URL
             output_path: 저장할 경로
@@ -285,29 +384,35 @@ class KictRainPredictorDialog(QtWidgets.QDialog, Ui_Dialog):
         self.download_manager.downloaded = 0
         self.download_manager.start_time = time.time()
         self.download_manager.progress_active = True
-        
+
         # 파일 크기를 추정하기 위한 함수
         def estimate_file_size():
             try:
                 # URL에서 리다이렉트를 확인하여 실제 파일 URL 찾기
+                from urllib.parse import parse_qs, urlparse
+
                 import requests
-                from urllib.parse import urlparse, parse_qs
-                
+
                 # Google Drive 파일 ID 추출
                 parsed = urlparse(url)
                 if "drive.google.com" in parsed.netloc:
-                    file_id = parse_qs(parsed.query).get('id', [''])[0]
-                    if not file_id and 'id=' in url:
+                    file_id = parse_qs(parsed.query).get("id", [""])[0]
+                    if not file_id and "id=" in url:
                         # URL에서 id 직접 추출 시도
-                        file_id = url.split('id=')[1].split('&')[0]
-                    
+                        file_id = url.split("id=")[1].split("&")[0]
+
                     if file_id:
                         # 리다이렉트 URL 찾기
                         session = requests.Session()
-                        response = session.get(f"https://drive.google.com/uc?id={file_id}&export=download", stream=True)
+                        response = session.get(
+                            f"https://drive.google.com/uc?id={file_id}&export=download",
+                            stream=True,
+                        )
                         if response.status_code == 200:
                             try:
-                                content_length = int(response.headers.get('content-length', 0))
+                                content_length = int(
+                                    response.headers.get("content-length", 0)
+                                )
                                 if content_length > 0:
                                     self.download_manager.file_size = content_length
                                     return content_length
@@ -315,193 +420,114 @@ class KictRainPredictorDialog(QtWidgets.QDialog, Ui_Dialog):
                                 pass
             except Exception as e:
                 print(f"파일 크기 추정 오류: {str(e)}")
-            
+
             # 추정 실패 시 기본값
             default_size = 1024 * 1024 * 100  # 대략 100MB로 추정
             self.download_manager.file_size = default_size
             return default_size
-        
+
         # 진행률 모니터링 스레드
         def progress_monitor():
             # 파일 크기 추정
             estimated_size = estimate_file_size()
             self.download_manager.file_size = estimated_size
-            
+
             # 임시 파일 크기 저장 변수 (파일 크기가 증가하지 않을 때 다운로드 완료 감지용)
             last_size = 0
             unchanged_count = 0
             progress_values = [0] * 5  # 최근 진행률 값을 저장하는 배열 (안정화용)
             progress_index = 0
-            
+
             # 초기 진행률 업데이트 - 간단하게 표시
             initial_msg = f"모델 {current_model}/{total_models}"
             self.download_manager.update_progress_signal.emit(0, initial_msg)
-            
+
             while self.download_manager.progress_active:
                 # 취소 확인
                 if self.download_manager.canceled:
                     break
-                    
+
                 try:
                     # 이미 다운로드된 파일 크기 확인
                     current_size = 0
                     if os.path.exists(output_path):
                         current_size = os.path.getsize(output_path)
                         self.download_manager.downloaded = current_size
-                    
+
                     # 파일 크기가 변하지 않으면 카운트 증가 (완료 감지용)
                     if current_size == last_size and current_size > 0:
                         unchanged_count += 1
                     else:
                         unchanged_count = 0
                         last_size = current_size
-                    
+
                     # 진행률 계산
                     downloaded_bytes = self.download_manager.downloaded
                     total_bytes = self.download_manager.file_size
-                    
+
                     if total_bytes > 0:
                         # 진행률 계산 (최대 99%까지만)
-                        raw_progress = min(99, int(downloaded_bytes * 100 / total_bytes))
-                        
+                        raw_progress = min(
+                            99, int(downloaded_bytes * 100 / total_bytes)
+                        )
+
                         # 진행률 안정화 (최근 5개 값의 평균)
                         progress_values[progress_index] = raw_progress
                         progress_index = (progress_index + 1) % len(progress_values)
                         progress = sum(progress_values) // len(progress_values)
-                        
+
                         # 다운로드 완료로 판단되면 100%로 설정
-                        if unchanged_count >= 6 and downloaded_bytes > 0:  # 3초간 크기 변화 없음
+                        if (
+                            unchanged_count >= 6 and downloaded_bytes > 0
+                        ):  # 3초간 크기 변화 없음
                             progress = 100
-                        
-                        # 다운로드 속도 계산
-                        elapsed = time.time() - self.download_manager.start_time
-                        if elapsed > 0:
-                            speed = downloaded_bytes / elapsed / 1024  # KB/s
-                            
-                            # 남은 시간 추정
-                            if downloaded_bytes > 0 and downloaded_bytes < total_bytes:
-                                eta = (total_bytes - downloaded_bytes) * elapsed / downloaded_bytes
-                                eta_str = f"{int(eta/60):02d}:{int(eta%60):02d}"
-                            else:
-                                eta_str = "--:--"
-                                
-                            # 진행 상황 업데이트 - 간단하게 모델 번호만 표시
-                            msg = f"모델 {current_model}/{total_models}"
-                            
-                            # 시그널을 통해 진행 상황 업데이트
-                            self.download_manager.update_progress_signal.emit(progress, msg)
-                except Exception as e:
+
+                        # 진행 상황 업데이트 - 간단하게 모델 번호만 표시
+                        msg = f"모델 {current_model}/{total_models}"
+
+                        # 시그널을 통해 진행 상황 업데이트
+                        self.download_manager.update_progress_signal.emit(progress, msg)
+                except Exception:
                     pass  # 모니터링 오류 무시
-                    
+
                 # 잠시 대기
                 time.sleep(0.5)
-        
+
         # 모니터링 스레드 시작
         monitor_thread = threading.Thread(target=progress_monitor)
         monitor_thread.daemon = True
         monitor_thread.start()
-                    
+
         try:
             # 기본 다운로드 시작 - callback 인자 없이 사용
             gdown.download(url, output_path, quiet=False)
-            
+
             # 모니터링 중지
             self.download_manager.progress_active = False
-            
+
             # 모니터링 스레드 종료 대기
             monitor_thread.join(1.0)  # 1초까지만 기다림
             return True
         except Exception as e:
             # 모니터링 중지
             self.download_manager.progress_active = False
-            
+
             # 오류 발생 시 시그널 발생
-            self.download_manager.download_error_signal.emit(f"다운로드 중 오류가 발생했습니다: {str(e)}")
+            self.download_manager.download_error_signal.emit(
+                f"다운로드 중 오류가 발생했습니다: {str(e)}"
+            )
             return False
-            
-    def download_single_target_model(self):
-        """Single Target 모델을 다운로드합니다."""
-        # 다운로드 취소 플래그 초기화
-        self.download_manager.canceled = False
-        
-        # 시그널을 통해 진행 상황 대화 상자 생성 요청
-        self.download_manager.create_progress_dialog_signal.emit("Single Target 모델 다운로드 중", 1)
-        
-        try:
-            output_path = os.path.join(self.models_dir, "model-best.tflite")
-            success = self.download_with_progress(
-                self.SINGLE_TARGET_MODEL_URL, 
-                output_path, 
-                "Single Target 모델"
-            )
 
-            # 시그널을 통해 완료 알림
-            self.download_manager.download_completed_signal.emit(
-                success, 
-                "Single Target 모델 다운로드가 완료되었습니다." if success else "다운로드가 취소되었습니다."
-            )
-        except Exception as e:
-            # 오류 발생 시 시그널 발생
-            self.download_manager.download_completed_signal.emit(
-                False, 
-                f"다운로드 중 오류가 발생했습니다: {str(e)}"
-            )
+    # ... (나머지 코드는 동일)
 
-    def download_multi_target_models(self):
-        """Multi Target 모델(앙상블 모델)을 다운로드합니다."""
-        # 총 모델 수
-        total_models = len(self.MULTI_TARGET_MODEL_URLS)
-        
-        # 다운로드 취소 플래그 초기화
-        self.download_manager.canceled = False
-        
-        # 시그널을 통해 진행 상황 대화 상자 생성 요청
-        self.download_manager.create_progress_dialog_signal.emit("Multi Target 모델 다운로드 중", total_models)
-        
-        try:
-            # 18개 모델 다운로드
-            success = True
-            for i, (minutes, url) in enumerate(self.MULTI_TARGET_MODEL_URLS.items(), 1):
-                # 취소 확인
-                if self.download_manager.canceled:
-                    success = False
-                    break
-                    
-                output_path = os.path.join(
-                    self.ensemble_dir, f"model-best_fcst_{minutes}min.tflite"
-                )
-                model_name = f"Multi Target {minutes}min 모델"
-                
-                # 시그널을 통해 현재 다운로드 중인 모델 정보 업데이트
-                self.download_manager.update_dialog_title_signal.emit(
-                    f"Multi Target 모델 다운로드 중 ({i}/{total_models}): {minutes}min"
-                )
-                
-                # 모델 다운로드
-                if not self.download_with_progress(url, output_path, model_name, total_models, i):
-                    success = False
-                    break
-
-            # 시그널을 통해 완료 알림
-            self.download_manager.download_completed_signal.emit(
-                success, 
-                "Multi Target 모델 다운로드가 완료되었습니다." if success else "다운로드가 취소되었습니다."
-            )
-        except Exception as e:
-            # 오류 발생 시 시그널 발생
-            self.download_manager.download_completed_signal.emit(
-                False, 
-                f"다운로드 중 오류가 발생했습니다: {str(e)}"
-            )
-
-    @QtCore.pyqtSlot(str)
+    @QtCore.pyqtSlot(str, int)
     def create_progress_dialog(self, title, total_models=1):
         """다운로드 진행 상황을 표시할 대화 상자를 생성합니다."""
         # 진행 상황 대화 상자 생성
         self.progress_dialog = QProgressDialog(self)
         self.progress_dialog.setWindowTitle(title)
         self.progress_dialog.setLabelText(f"모델 1/{total_models}")
-        
+
         # 진행 바 숨기기
         self.progress_dialog.setRange(0, 0)  # 무한 진행 모드로 설정(현행 마크)
         self.progress_dialog.setCancelButtonText("취소")
@@ -509,54 +535,54 @@ class KictRainPredictorDialog(QtWidgets.QDialog, Ui_Dialog):
         self.progress_dialog.setMinimumWidth(200)  # 너비 설정
         self.progress_dialog.setAutoClose(False)  # 자동 종료 방지
         self.progress_dialog.setAutoReset(False)  # 자동 리셋 방지
-        
+
         # 모달이 아닌 모드로 설정 (UI가 계속 반응하도록)
         self.progress_dialog.setModal(False)
-        
+
         # 취소 버튼 연결
         self.progress_dialog.canceled.connect(self.cancel_download)
-        
+
         # 총 모델 수 저장
         self.total_models = total_models
         self.current_model = 1
-        
+
         # 창을 표시
         self.progress_dialog.show()
         QApplication.processEvents()
-    
+
     @QtCore.pyqtSlot(str)
     def update_progress_dialog_title(self, title):
         """진행 상황 대화 상자의 제목을 업데이트합니다."""
-        if hasattr(self, 'progress_dialog') and self.progress_dialog:
+        if hasattr(self, "progress_dialog") and self.progress_dialog:
             self.progress_dialog.setWindowTitle(title)
             QApplication.processEvents()
-    
+
     @QtCore.pyqtSlot(int, str)
     def update_progress_dialog(self, progress, message):
         """진행 상황 대화 상자를 업데이트합니다."""
-        if hasattr(self, 'progress_dialog') and self.progress_dialog:
+        if hasattr(self, "progress_dialog") and self.progress_dialog:
             # 진행률을 무시하고 메시지만 업데이트
             # 단순히 "모델 n/total" 형태로 표시
             # message를 파싱하여 모델 번호만 추출
             try:
-                model_info = message.split(':')[0].strip()
+                model_info = message.split(":")[0].strip()
                 self.progress_dialog.setLabelText(model_info)
-            except:
+            except Exception:
                 self.progress_dialog.setLabelText(message)
-            
+
             # UI 갱신을 위한 이벤트 처리 강제 실행
             QApplication.processEvents()
-    
+
     @QtCore.pyqtSlot()
     def cancel_download(self):
         """다운로드 취소 처리를 수행합니다."""
         # 취소 신호 설정 (gdown은 직접적인 취소 방법이 없으므로 이후 작업을 중단하는 용도)
         self.download_manager.canceled = True
-        
+
     @QtCore.pyqtSlot(str)
     def download_error(self, error_message):
         """다운로드 오류 처리를 수행합니다."""
-        if hasattr(self, 'progress_dialog') and self.progress_dialog:
+        if hasattr(self, "progress_dialog") and self.progress_dialog:
             self.progress_dialog.close()
             QMessageBox.warning(self, "다운로드 오류", error_message)
 
@@ -564,10 +590,10 @@ class KictRainPredictorDialog(QtWidgets.QDialog, Ui_Dialog):
     def download_completed(self, success, message):
         """다운로드 완료 후 UI를 업데이트합니다."""
         # 진행 상황 대화 상자 닫기
-        if hasattr(self, 'progress_dialog') and self.progress_dialog:
+        if hasattr(self, "progress_dialog") and self.progress_dialog:
             self.progress_dialog.close()
             self.progress_dialog = None
-            
+
         # UI 활성화
         self.setEnabled(True)
         self.pushButton_download.setText("모델 다운로드")
@@ -654,6 +680,43 @@ class KictRainPredictorDialog(QtWidgets.QDialog, Ui_Dialog):
 
         return ver1_installed, ver2_installed
 
+    def create_prediction_dialog(self):
+        """예측 진행 상황을 표시할 대화 상자를 생성합니다."""
+        # 예측 상황 대화 상자 생성
+        self.prediction_dialog = QDialog(self)
+        self.prediction_dialog.setWindowTitle("강우 예측 진행 상황")
+        self.prediction_dialog.setMinimumWidth(400)
+        self.prediction_dialog.setMinimumHeight(150)
+
+        # 레이아웃 설정
+        layout = QVBoxLayout(self.prediction_dialog)
+
+        # 상태 메시지를 표시할 레이블
+        self.prediction_status_label = QLabel("예측 준비 중...")
+        self.prediction_status_label.setAlignment(QtCore.Qt.AlignCenter)
+        layout.addWidget(self.prediction_status_label)
+
+        # 진행 중임을 나타내는 활동 표시기(Activity Indicator)
+        self.busy_indicator = QProgressBar(self.prediction_dialog)
+        self.busy_indicator.setRange(0, 0)  # 무한 진행 모드
+        layout.addWidget(self.busy_indicator)
+
+        # 닫기 버튼 (예측 중에는 비활성화됨)
+        self.close_button = QPushButton("닫기", self.prediction_dialog)
+        self.close_button.setEnabled(False)  # 초기에 비활성화
+        self.close_button.clicked.connect(self.prediction_dialog.accept)
+        layout.addWidget(self.close_button)
+
+        # 대화 상자 표시
+        self.prediction_dialog.show()
+        QtWidgets.QApplication.processEvents()
+
+    def update_prediction_status(self, message):
+        """예측 상태 메시지를 업데이트합니다."""
+        if hasattr(self, "prediction_dialog") and self.prediction_dialog:
+            self.prediction_status_label.setText(message)
+            QtWidgets.QApplication.processEvents()
+
     def run_prediction(self):
         """예측 버튼 클릭 시 실행되는 함수입니다."""
         # 입력 파일 경로 가져오기
@@ -680,54 +743,72 @@ class KictRainPredictorDialog(QtWidgets.QDialog, Ui_Dialog):
             )
             return
 
-        # 모델 디렉토리 경로 설정
+        # 예측 상태 창 생성 및 표시
+        self.create_prediction_dialog()
 
         try:
             # 선택된 모델에 따라 적절한 함수 호출
-            from kict_rain_forecast.services.predict import ver1_tflite_main, ver2_main
-
             # 현재 날짜와 시간을 yyyymmddhhmm 형식으로 가져오기
             from datetime import datetime
+
+            from kict_rain_forecast.services.predict import ver1_tflite_main, ver2_main
+
             current_time = datetime.now().strftime("%Y%m%d%H%M")
-            
+
             # 날짜/시간을 포함한 출력 폴더 경로 생성
             output_path_with_time = os.path.join(output_path, current_time)
-            
+
             # 폴더가 없으면 생성
             if not os.path.exists(output_path_with_time):
                 os.makedirs(output_path_with_time)
-                
-            # 예측 시작 메시지 표시
-            self.label_model_status.setText("예측 중... 잠시만 기다려주세요.")
-            QtWidgets.QApplication.processEvents()  # UI 업데이트
+
+            # 예측 시작 메시지 표시 (별도 창에)
+            self.update_prediction_status("모델 로딩 중...")
 
             if self.radioButton_2.isChecked():  # Single Target
                 # Ver1 TFLite 모델 사용
+                model_type = "Single Target"
+                self.update_prediction_status(
+                    f"{model_type} 모델을 사용하여 예측 중..."
+                )
                 model_path = os.path.join(self.models_dir, "model-best.tflite")
                 ver1_tflite_main(input_files, model_path, output_path_with_time)
             else:  # Multi Target
                 # Ver2 모델 사용
+                model_type = "Multi Target"
+                self.update_prediction_status(
+                    f"{model_type} 모델을 사용하여 예측 중..."
+                )
                 model_path_dir = self.ensemble_dir
                 ver2_main(input_files, model_path_dir, output_path_with_time)
 
-            # 성공 메시지 표시
-            QMessageBox.information(
-                self,
-                "예측 완료",
-                f"예측이 완료되었습니다.\n결과는 {output_path_with_time} 폴더에 저장되었습니다.",
+            # 예측 완료 메시지 표시 (별도 창에)
+            self.update_prediction_status(
+                f"예측 완료! 결과는 {output_path_with_time} 폴더에 저장되었습니다."
             )
-            self.label_model_status.setText("예측 완료")
+
+            # 닫기 버튼 활성화
+            if hasattr(self, "close_button"):
+                self.close_button.setEnabled(True)
 
             # 체크박스가 체크되어 있으면 결과를 QGIS 레이어로 추가
             if self.checkBox.isChecked():
+                self.update_prediction_status("결과를 QGIS 레이어로 추가 중...")
                 self.add_results_to_map(output_path_with_time)
+                self.update_prediction_status(
+                    "완료: 결과가 QGIS 레이어에 추가되었습니다."
+                )
 
         except Exception as e:
-            # 오류 메시지 표시
+            # 오류 메시지 표시 (별도 창에)
+            self.update_prediction_status(f"오류 발생: {str(e)}")
+            if hasattr(self, "close_button"):
+                self.close_button.setEnabled(True)
+
+            # 추가로 오류 메시지 대화 상자 표시
             QMessageBox.critical(
                 self, "오류 발생", f"예측 중 오류가 발생했습니다:\n{str(e)}"
             )
-            self.label_model_status.setText("오류 발생")
 
     def add_results_to_map(self, output_path):
         """예측 결과 파일을 QGIS 레이어로 추가합니다.
