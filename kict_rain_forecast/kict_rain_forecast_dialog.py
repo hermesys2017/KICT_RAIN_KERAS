@@ -384,6 +384,11 @@ class KictRainPredictorDialog(QtWidgets.QDialog, Ui_Dialog):
         self.download_manager.downloaded = 0
         self.download_manager.start_time = time.time()
         self.download_manager.progress_active = True
+        
+        # 출력 디렉토리 확인 및 생성
+        output_dir = os.path.dirname(output_path)
+        if not os.path.exists(output_dir):
+            os.makedirs(output_dir, exist_ok=True)
 
         # 파일 크기를 추정하기 위한 함수
         def estimate_file_size():
@@ -499,8 +504,19 @@ class KictRainPredictorDialog(QtWidgets.QDialog, Ui_Dialog):
         monitor_thread.start()
 
         try:
-            # 기본 다운로드 시작 - callback 인자 없이 사용
-            gdown.download(url, output_path, quiet=False)
+            # 파일이 이미 존재하면 삭제
+            if os.path.exists(output_path):
+                try:
+                    os.remove(output_path)
+                except Exception as e:
+                    print(f"기존 파일 삭제 실패: {str(e)}")
+
+            # 기본 다운로드 시작 - quiet=False, fuzzy=True 옵션 추가
+            gdown.download(url, output_path, quiet=False, fuzzy=True)
+
+            # 다운로드 후 파일 존재 확인
+            if not os.path.exists(output_path) or os.path.getsize(output_path) == 0:
+                raise Exception("파일이 다운로드되지 않았거나 크기가 0입니다.")
 
             # 모니터링 중지
             self.download_manager.progress_active = False

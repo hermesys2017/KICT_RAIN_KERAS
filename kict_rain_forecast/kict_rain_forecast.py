@@ -175,7 +175,7 @@ class KictRainPredictor:
 
     def check_and_install_dependencies(self):
         """필요한 패키지가 설치되어 있는지 확인하고, 없으면 설치합니다."""
-        required_packages = ["gdown", "tensorflow", "numpy"]
+        required_packages = ["gdown", "tensorflow"]
         missing_packages = []
 
         for package in required_packages:
@@ -208,7 +208,9 @@ class KictRainPredictor:
                     QMessageBox.information(
                         None,
                         self.tr("설치 완료"),
-                        self.tr("모든 필요한 패키지가 설치되었습니다."),
+                        self.tr(
+                            "모든 필요한 패키지가 설치되었습니다. QGIS를 재시작해주세요."
+                        ),
                     )
                 except Exception as e:
                     QMessageBox.warning(
