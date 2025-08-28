@@ -76,3 +76,8 @@ docstring-code-format = false
 # This only has an effect when the `docstring-code-format` setting is
 # enabled.
 docstring-code-line-length = "dynamic"
+
+[tool.qgis-plugin-ci]
+plugin_path = "kict_rain_ai"
+github_organization_slug = "hermesys2017"
+project_slug = "kict-rain-ai"
