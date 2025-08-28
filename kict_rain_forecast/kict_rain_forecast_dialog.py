@@ -379,6 +379,17 @@ class KictRainPredictorDialog(QtWidgets.QDialog, Ui_Dialog):
             total_models: 전체 모델 수
             current_model: 현재 다운로드 중인 모델 번호
         """
+        # URL과 출력 경로 유효성 검사
+        if not url:
+            error_msg = "다운로드 URL이 지정되지 않았습니다."
+            self.download_manager.download_error_signal.emit(error_msg)
+            return False
+            
+        if not output_path:
+            error_msg = "출력 파일 경로가 지정되지 않았습니다."
+            self.download_manager.download_error_signal.emit(error_msg)
+            return False
+            
         # 진행 상황 모니터링을 위한 변수
         self.download_manager.file_size = 0
         self.download_manager.downloaded = 0
@@ -387,8 +398,25 @@ class KictRainPredictorDialog(QtWidgets.QDialog, Ui_Dialog):
         
         # 출력 디렉토리 확인 및 생성
         output_dir = os.path.dirname(output_path)
-        if not os.path.exists(output_dir):
-            os.makedirs(output_dir, exist_ok=True)
+        if not output_dir:
+            error_msg = f"출력 파일 경로 '{output_path}'에서 디렉토리를 추출할 수 없습니다."
+            self.download_manager.download_error_signal.emit(error_msg)
+            return False
+            
+        try:
+            # 디렉토리가 없으면 생성
+            if not os.path.exists(output_dir):
+                os.makedirs(output_dir, exist_ok=True)
+                
+            # 디렉토리 쓰기 권한 확인
+            if not os.access(output_dir, os.W_OK):
+                error_msg = f"출력 디렉토리 '{output_dir}'에 쓰기 권한이 없습니다."
+                self.download_manager.download_error_signal.emit(error_msg)
+                return False
+        except Exception as e:
+            error_msg = f"출력 디렉토리 '{output_dir}' 생성 또는 권한 확인 중 오류: {str(e)}"
+            self.download_manager.download_error_signal.emit(error_msg)
+            return False
 
         # 파일 크기를 추정하기 위한 함수
         def estimate_file_size():
@@ -511,12 +539,29 @@ class KictRainPredictorDialog(QtWidgets.QDialog, Ui_Dialog):
                 except Exception as e:
                     print(f"기존 파일 삭제 실패: {str(e)}")
 
-            # 기본 다운로드 시작 - quiet=False, fuzzy=True 옵션 추가
-            gdown.download(url, output_path, quiet=False, fuzzy=True)
-
-            # 다운로드 후 파일 존재 확인
-            if not os.path.exists(output_path) or os.path.getsize(output_path) == 0:
-                raise Exception("파일이 다운로드되지 않았거나 크기가 0입니다.")
+            try:
+                # 출력 파일 경로 확인 및 테스트 파일 생성
+                try:
+                    # 파일이 생성 가능한지 먼저 테스트
+                    with open(output_path, 'wb') as test_file:
+                        test_file.write(b'test')
+                    # 테스트 파일 삭제
+                    os.remove(output_path)
+                except Exception as file_test_error:
+                    raise Exception(f"출력 파일 '{output_path}'에 쓰기 권한 확인 실패: {str(file_test_error)}")
+                
+                # 기본 다운로드 시작 - quiet=False, fuzzy=True 옵션 추가
+                downloaded_path = gdown.download(url, output_path, quiet=False, fuzzy=True)
+                
+                # gdown이 None을 반환하면 오류 발생
+                if downloaded_path is None:
+                    raise Exception("gdown 다운로드가 실패하고 None을 반환했습니다")
+                
+                # 다운로드 후 파일 존재 확인
+                if not os.path.exists(output_path) or os.path.getsize(output_path) == 0:
+                    raise Exception("파일이 다운로드되지 않았거나 크기가 0입니다.")
+            except Exception as download_error:
+                raise Exception(f"다운로드 실패: {str(download_error)}")
 
             # 모니터링 중지
             self.download_manager.progress_active = False
@@ -528,10 +573,19 @@ class KictRainPredictorDialog(QtWidgets.QDialog, Ui_Dialog):
             # 모니터링 중지
             self.download_manager.progress_active = False
 
+            # 상세한 오류 로깅
+            error_msg = f"다운로드 중 오류 발생:\n"
+            error_msg += f"- URL: {url}\n"
+            error_msg += f"- 출력 경로: {output_path}\n"
+            error_msg += f"- 오류 메시지: {str(e)}\n"
+            error_msg += f"- 오류 타입: {type(e).__name__}"
+            
+            print("===== 다운로드 오류 상세 정보 =====")
+            print(error_msg)
+            print("====================================")
+
             # 오류 발생 시 시그널 발생
-            self.download_manager.download_error_signal.emit(
-                f"다운로드 중 오류가 발생했습니다: {str(e)}"
-            )
+            self.download_manager.download_error_signal.emit(error_msg)
             return False
 
     # ... (나머지 코드는 동일)
@@ -600,7 +654,14 @@ class KictRainPredictorDialog(QtWidgets.QDialog, Ui_Dialog):
         """다운로드 오류 처리를 수행합니다."""
         if hasattr(self, "progress_dialog") and self.progress_dialog:
             self.progress_dialog.close()
-            QMessageBox.warning(self, "다운로드 오류", error_message)
+            
+            # 오류 메시지를 개행 문자가 있는 경우 여러 줄로 표시하기 위해 QMessageBox 설정
+            msg_box = QMessageBox(self)
+            msg_box.setIcon(QMessageBox.Warning)
+            msg_box.setWindowTitle("다운로드 오류")
+            msg_box.setText(error_message)
+            msg_box.setStandardButtons(QMessageBox.Ok)
+            msg_box.exec_()
 
     @QtCore.pyqtSlot(bool, str)
     def download_completed(self, success, message):

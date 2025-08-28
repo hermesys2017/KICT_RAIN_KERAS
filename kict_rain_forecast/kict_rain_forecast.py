@@ -175,15 +175,34 @@ class KictRainPredictor:
 
     def check_and_install_dependencies(self):
         """필요한 패키지가 설치되어 있는지 확인하고, 없으면 설치합니다."""
-        required_packages = ["gdown", "tensorflow"]
+        required_packages = {"gdown": "5.2.0", "tensorflow": "2.20.0"}
         missing_packages = []
 
-        for package in required_packages:
+        for package, version in required_packages.items():
             try:
-                importlib.import_module(package)
-                print(f"{package} " + self.tr("패키지가 이미 설치되어 있습니다."))
+                module = importlib.import_module(package)
+                # 버전 확인 (모듈에 __version__ 속성이 있는 경우)
+                if hasattr(module, "__version__"):
+                    installed_version = module.__version__
+                    if installed_version != version:
+                        print(
+                            f"{package} 버전이 {installed_version}이지만, {version}이 필요합니다. 업그레이드합니다."
+                        )
+                        missing_packages.append(f"{package}=={version}")
+                    else:
+                        print(
+                            f"{package} {version} "
+                            + self.tr("패키지가 이미 설치되어 있습니다.")
+                        )
+                else:
+                    print(
+                        f"{package} "
+                        + self.tr(
+                            "패키지가 설치되어 있습니다. 버전을 확인할 수 없습니다."
+                        )
+                    )
             except ImportError:
-                missing_packages.append(package)
+                missing_packages.append(f"{package}=={required_packages[package]}")
 
         if missing_packages:
             msg = QMessageBox()
@@ -198,13 +217,15 @@ class KictRainPredictor:
 
             if msg.exec_() == QMessageBox.Yes:
                 try:
-                    for package in missing_packages:
-                        print(f"{package} " + self.tr("설치 중..."))
-                        subprocess.check_call(
-                            ["python", "-m", "pip", "install", package]
-                        )
-                        print(f"{package} " + self.tr("설치 완료!"))
-
+                    # 버전이 이미 missing_packages 내에서 지정되어 있음
+                    # 예: ['gdown==5.2.0', 'tensorflow==2.20.0']
+                    subprocess.check_call(
+                        [
+                            "pip",
+                            "install",
+                            *missing_packages,
+                        ]
+                    )
                     QMessageBox.information(
                         None,
                         self.tr("설치 완료"),
