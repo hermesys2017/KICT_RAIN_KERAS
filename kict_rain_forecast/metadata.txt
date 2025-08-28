@@ -3,7 +3,7 @@
 # This file should be included when you package your plugin.# Mandatory items:
 
 [general]
-name=KICT Rain Forecast
+name=KICT Rain AI
 qgisMinimumVersion=3.0
 description=A QGIS plugin for quantitative precipitation forecasting using deep learning models. This plugin utilizes radar data to predict rainfall patterns up to 180 minutes ahead with three different model options: standard Keras model, TFLite optimized model, and ensemble TFLite models. Developed based on the Korean Institute of Civil Engineering and Building Technology (KICT) rainfall prediction system.
 version=0.1

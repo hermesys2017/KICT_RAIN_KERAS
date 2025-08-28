@@ -62,7 +62,7 @@ class KictRainPredictor:
 
         # Declare instance attributes
         self.actions = []
-        self.menu = self.tr("&KICT Rain Forecast")
+        self.menu = self.tr("&KICT Rain AI")
 
         # Check if plugin was started the first time in current QGIS session
         # Must be set in initGui() to survive plugin reloads
@@ -222,7 +222,7 @@ class KictRainPredictor:
     def unload(self):
         """Removes the plugin menu item and icon from QGIS GUI."""
         for action in self.actions:
-            self.iface.removePluginMenu(self.tr("&KICT Rain Forecast"), action)
+            self.iface.removePluginMenu(self.tr("&KICT Rain AI"), action)
             self.iface.removeToolBarIcon(action)
 
     def run(self):
