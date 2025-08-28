@@ -38,15 +38,15 @@ LOCALES =
 # translation
 SOURCES = \
 	__init__.py \
-	kict_rain_forecast.py kict_rain_forecast_dialog.py
+	kict_rain_ai.py kict_rain_ai_dialog.py
 
-PLUGINNAME = kict_rain_forecast
+PLUGINNAME = kict_rain_ai
 
 PY_FILES = \
 	__init__.py \
-	kict_rain_forecast.py kict_rain_forecast_dialog.py
+	kict_rain_ai.py kict_rain_ai_dialog.py
 
-UI_FILES = kict_rain_forecast_dialog_base.ui
+UI_FILES = kict_rain_ai_dialog_base.ui
 
 EXTRAS = metadata.txt icon.png
 

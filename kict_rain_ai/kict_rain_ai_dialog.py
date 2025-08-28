@@ -28,6 +28,7 @@ import threading
 import time
 
 import gdown
+from kict_rain_ai.kict_rain_ai_dialog_base import Ui_Dialog
 from PyQt5 import QtCore, QtWidgets
 from qgis.core import QgsProject, QgsRasterLayer
 from qgis.PyQt.QtCore import QObject, pyqtSignal
@@ -42,8 +43,6 @@ from qgis.PyQt.QtWidgets import (
     QPushButton,
     QVBoxLayout,
 )
-
-from kict_rain_forecast.kict_rain_forecast_dialog_base import Ui_Dialog
 
 
 # 다운로드 관리자 클래스 - 스레드 간 통신을 위한 시그널 정의
@@ -384,37 +383,41 @@ class KictRainPredictorDialog(QtWidgets.QDialog, Ui_Dialog):
             error_msg = "다운로드 URL이 지정되지 않았습니다."
             self.download_manager.download_error_signal.emit(error_msg)
             return False
-            
+
         if not output_path:
             error_msg = "출력 파일 경로가 지정되지 않았습니다."
             self.download_manager.download_error_signal.emit(error_msg)
             return False
-            
+
         # 진행 상황 모니터링을 위한 변수
         self.download_manager.file_size = 0
         self.download_manager.downloaded = 0
         self.download_manager.start_time = time.time()
         self.download_manager.progress_active = True
-        
+
         # 출력 디렉토리 확인 및 생성
         output_dir = os.path.dirname(output_path)
         if not output_dir:
-            error_msg = f"출력 파일 경로 '{output_path}'에서 디렉토리를 추출할 수 없습니다."
+            error_msg = (
+                f"출력 파일 경로 '{output_path}'에서 디렉토리를 추출할 수 없습니다."
+            )
             self.download_manager.download_error_signal.emit(error_msg)
             return False
-            
+
         try:
             # 디렉토리가 없으면 생성
             if not os.path.exists(output_dir):
                 os.makedirs(output_dir, exist_ok=True)
-                
+
             # 디렉토리 쓰기 권한 확인
             if not os.access(output_dir, os.W_OK):
                 error_msg = f"출력 디렉토리 '{output_dir}'에 쓰기 권한이 없습니다."
                 self.download_manager.download_error_signal.emit(error_msg)
                 return False
         except Exception as e:
-            error_msg = f"출력 디렉토리 '{output_dir}' 생성 또는 권한 확인 중 오류: {str(e)}"
+            error_msg = (
+                f"출력 디렉토리 '{output_dir}' 생성 또는 권한 확인 중 오류: {str(e)}"
+            )
             self.download_manager.download_error_signal.emit(error_msg)
             return False
 
@@ -543,20 +546,24 @@ class KictRainPredictorDialog(QtWidgets.QDialog, Ui_Dialog):
                 # 출력 파일 경로 확인 및 테스트 파일 생성
                 try:
                     # 파일이 생성 가능한지 먼저 테스트
-                    with open(output_path, 'wb') as test_file:
-                        test_file.write(b'test')
+                    with open(output_path, "wb") as test_file:
+                        test_file.write(b"test")
                     # 테스트 파일 삭제
                     os.remove(output_path)
                 except Exception as file_test_error:
-                    raise Exception(f"출력 파일 '{output_path}'에 쓰기 권한 확인 실패: {str(file_test_error)}")
-                
+                    raise Exception(
+                        f"출력 파일 '{output_path}'에 쓰기 권한 확인 실패: {str(file_test_error)}"
+                    )
+
                 # 기본 다운로드 시작 - quiet=False, fuzzy=True 옵션 추가
-                downloaded_path = gdown.download(url, output_path, quiet=False, fuzzy=True)
-                
+                downloaded_path = gdown.download(
+                    url, output_path, quiet=False, fuzzy=True
+                )
+
                 # gdown이 None을 반환하면 오류 발생
                 if downloaded_path is None:
                     raise Exception("gdown 다운로드가 실패하고 None을 반환했습니다")
-                
+
                 # 다운로드 후 파일 존재 확인
                 if not os.path.exists(output_path) or os.path.getsize(output_path) == 0:
                     raise Exception("파일이 다운로드되지 않았거나 크기가 0입니다.")
@@ -574,12 +581,12 @@ class KictRainPredictorDialog(QtWidgets.QDialog, Ui_Dialog):
             self.download_manager.progress_active = False
 
             # 상세한 오류 로깅
-            error_msg = f"다운로드 중 오류 발생:\n"
+            error_msg = "다운로드 중 오류 발생:\n"
             error_msg += f"- URL: {url}\n"
             error_msg += f"- 출력 경로: {output_path}\n"
             error_msg += f"- 오류 메시지: {str(e)}\n"
             error_msg += f"- 오류 타입: {type(e).__name__}"
-            
+
             print("===== 다운로드 오류 상세 정보 =====")
             print(error_msg)
             print("====================================")
@@ -654,7 +661,7 @@ class KictRainPredictorDialog(QtWidgets.QDialog, Ui_Dialog):
         """다운로드 오류 처리를 수행합니다."""
         if hasattr(self, "progress_dialog") and self.progress_dialog:
             self.progress_dialog.close()
-            
+
             # 오류 메시지를 개행 문자가 있는 경우 여러 줄로 표시하기 위해 QMessageBox 설정
             msg_box = QMessageBox(self)
             msg_box.setIcon(QMessageBox.Warning)
@@ -828,7 +835,7 @@ class KictRainPredictorDialog(QtWidgets.QDialog, Ui_Dialog):
             # 현재 날짜와 시간을 yyyymmddhhmm 형식으로 가져오기
             from datetime import datetime
 
-            from kict_rain_forecast.services.predict import ver1_tflite_main, ver2_main
+            from kict_rain_ai.services.predict import ver1_tflite_main, ver2_main
 
             current_time = datetime.now().strftime("%Y%m%d%H%M")
 

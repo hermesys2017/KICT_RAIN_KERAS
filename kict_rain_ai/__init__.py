@@ -32,5 +32,6 @@ def classFactory(iface):  # pylint: disable=invalid-name
     :type iface: QgsInterface
     """
     #
-    from .kict_rain_forecast import KictRainPredictor
+    from .kict_rain_ai import KictRainPredictor
+
     return KictRainPredictor(iface)

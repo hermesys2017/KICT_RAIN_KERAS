@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 ################################################################################
-## Form generated from reading UI file 'kict_rain_forecast_dialog_base.ui'
+## Form generated from reading UI file 'kict_rain_ai_dialog_base.ui'
 ##
 ## Created by: Qt User Interface Compiler version 5.15.2
 ##

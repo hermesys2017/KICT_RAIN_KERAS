@@ -1,5 +1,5 @@
-from kict_rain_forecast.services.data import dataset
-from kict_rain_forecast.services.model_oop import (
+from kict_rain_ai.services.data import dataset
+from kict_rain_ai.services.model_oop import (
     RainVer1Model,
     RainVer1TfliteModel,
     RainVer2Model,

@@ -8,17 +8,16 @@
 
 """
 
-__author__ = 'sukmin28@hermesys.co.kr'
-__date__ = '2025-07-10'
-__copyright__ = 'Copyright 2025, KICT, HermeSys'
+__author__ = "sukmin28@hermesys.co.kr"
+__date__ = "2025-07-10"
+__copyright__ = "Copyright 2025, KICT, HermeSys"
 
 import unittest
 
-from qgis.PyQt.QtGui import QDialogButtonBox, QDialog
-
-from kict_rain_forecast_dialog import KictRainPredictorDialog
-
+from kict_rain_ai_dialog import KictRainPredictorDialog
+from qgis.PyQt.QtGui import QDialog, QDialogButtonBox
 from utilities import get_qgis_app
+
 QGIS_APP = get_qgis_app()
 
 
@@ -48,8 +47,8 @@ class KictRainPredictorDialogTest(unittest.TestCase):
         result = self.dialog.result()
         self.assertEqual(result, QDialog.Rejected)
 
+
 if __name__ == "__main__":
     suite = unittest.makeSuite(KictRainPredictorDialogTest)
     runner = unittest.TextTestRunner(verbosity=2)
     runner.run(suite)
-

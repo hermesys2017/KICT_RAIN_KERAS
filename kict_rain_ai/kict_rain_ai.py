@@ -162,10 +162,10 @@ class KictRainPredictor:
         # 필요한 패키지 설치 확인 및 설치
         self.check_and_install_dependencies()
 
-        icon_path = ":/plugins/kict_rain_forecast/icon.png"
+        icon_path = ":/plugins/kict_rain_ai/icon.png"
         self.add_action(
             icon_path,
-            text=self.tr("kict_rain_forecast"),
+            text=self.tr("kict_rain_ai"),
             callback=self.run,
             parent=self.iface.mainWindow(),
         )
@@ -252,7 +252,7 @@ class KictRainPredictor:
         # Create the dialog with elements (after translation) and keep reference
         # Only create GUI ONCE in callback, so that it will only load when the plugin is started
         # Import the code for the dialog
-        from .kict_rain_forecast_dialog import KictRainPredictorDialog
+        from .kict_rain_ai_dialog import KictRainPredictorDialog
 
         if self.first_start:
             self.first_start = False
