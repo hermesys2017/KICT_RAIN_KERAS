@@ -25,6 +25,8 @@
 import importlib
 import os.path
 import subprocess
+import sys
+import platform
 
 from qgis.PyQt.QtCore import QCoreApplication, QSettings, QTranslator
 from qgis.PyQt.QtGui import QIcon
@@ -219,13 +221,55 @@ class KictRainPredictor:
                 try:
                     # 버전이 이미 missing_packages 내에서 지정되어 있음
                     # 예: ['gdown==5.2.0', 'tensorflow==2.20.0']
-                    subprocess.check_call(
-                        [
-                            "pip",
-                            "install",
-                            *missing_packages,
-                        ]
-                    )
+                    package_install_success = False
+                    error_messages = []
+                    
+                    # 여러 설치 방법을 시도
+                    install_methods = []
+                    
+                    # 현재 Python 인터프리터로 설치 시도 (가장 안전한 방법)
+                    install_methods.append(("Python Interpreter", [sys.executable, "-m", "pip", "install", *missing_packages]))
+                    
+                    # 운영체제에 따라 추가 설치 방법 정의
+                    if platform.system() == "Linux":
+                        install_methods.append(("pip3", ["pip3", "install", *missing_packages]))
+                        install_methods.append(("pip", ["pip", "install", *missing_packages]))
+                        # Ubuntu에서 자주 사용되는 python3-pip 패키지 사용
+                        install_methods.append(("python3 -m pip", ["python3", "-m", "pip", "install", *missing_packages]))
+                    else:  # Windows 및 기타 OS
+                        install_methods.append(("pip", ["pip", "install", *missing_packages]))
+                        install_methods.append(("pip3", ["pip3", "install", *missing_packages]))
+                    
+                    # 각 방법을 순차적으로 시도
+                    for method_name, command in install_methods:
+                        try:
+                            print(f"패키지 설치 시도 방법: {method_name}")
+                            subprocess.check_call(command)
+                            package_install_success = True
+                            print(f"패키지 설치 성공: {method_name}")
+                            break  # 성공하면 반복 중단
+                        except Exception as e:
+                            error_message = f"{method_name} 방법 실패: {str(e)}"
+                            print(error_message)
+                            error_messages.append(error_message)
+                    
+                    # 모든 방법이 실패한 경우
+                    if not package_install_success:
+                        # 수동 설치 안내 메시지
+                        manual_install_msg = self.tr(
+                            "자동 설치에 실패했습니다. 다음 명령어로 수동 설치를 시도해보세요:\n\n"
+                            "터미널 또는 명령 프롬프트에서:\n"
+                        )
+                        
+                        if platform.system() == "Linux":
+                            manual_install_msg += "python3 -m pip install " + " ".join(missing_packages)
+                        else:
+                            manual_install_msg += "pip install " + " ".join(missing_packages)
+                            
+                        manual_install_msg += "\n\n" + self.tr("또는 QGIS의 Python 콘솔에서:\n") + \
+                            "import pip; pip.main(['install', '" + "', '".join(missing_packages) + "'])"
+                            
+                        raise Exception("\n".join(error_messages) + "\n\n" + manual_install_msg)
                     QMessageBox.information(
                         None,
                         self.tr("설치 완료"),
