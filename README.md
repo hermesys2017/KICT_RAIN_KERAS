@@ -203,7 +203,3 @@ make zip
 ## 📞 지원
 
 문제가 발생하거나 질문이 있으시면 [이슈 트래커](https://github.com/hermesys2017/KICT_RAIN_KERAS/issues)에 등록해주세요.
-
----
-
-**Developed with ❤️ by KICT & HermeSys**
